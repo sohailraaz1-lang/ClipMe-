@@ -82,7 +82,7 @@ object ModelStore {
 
 object Downloader {
     /** Downloads (resumable, with retries) and installs a model. Throws on failure / cancel. */
-    fun fetch(ctx: Context, m: ModelInfo, cancel: AtomicBoolean, prog: (Long, Long) -> Unit) {
+    fun fetch(ctx: Context, m: ModelInfo, cancel: AtomicBoolean, note: (String) -> Unit, prog: (Long, Long) -> Unit) {
         val isZip = m.kind == "asr"
         val dir = if (isZip) ctx.cacheDir else ModelStore.llmDir(ctx)
         val dest = File(dir, if (isZip) m.id + ".zip" else m.file)
@@ -96,13 +96,16 @@ object Downloader {
         var attempt = 0
         while (true) {
             if (cancel.get()) throw CancelledException()
+            note(if (attempt == 0) "Connecting..." else "Retrying (" + attempt + "/5)...")
             try {
                 download(m.url, part, cancel, prog)
                 break
             } catch (e: IOException) {
                 attempt++
-                if (attempt >= 6) throw IOException("Network problem: " + (e.message ?: "connection lost"))
-                Thread.sleep(minOf(8000L, 1000L shl attempt))   // then resume from the .part file
+                val why = e.javaClass.simpleName + ": " + (e.message ?: "connection lost")
+                note("Problem: " + why + " - retrying")
+                if (attempt >= 6) throw IOException("Network problem: " + why)
+                Thread.sleep(minOf(5000L, 1000L shl attempt))   // then resume from the .part file
             }
         }
 
@@ -134,9 +137,10 @@ object Downloader {
         var have = if (part.exists()) part.length() else 0L
         val c = URL(url).openConnection() as HttpURLConnection
         try {
-            c.connectTimeout = 20_000
+            c.connectTimeout = 15_000
             c.readTimeout = 30_000
             c.setRequestProperty("User-Agent", "ClipMe/2.1 (Android)")
+            c.setRequestProperty("Accept-Encoding", "identity")
             if (have > 0) c.setRequestProperty("Range", "bytes=$have-")
             val code = c.responseCode
             if (code == 416) {

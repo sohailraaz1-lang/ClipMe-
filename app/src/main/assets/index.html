@@ -56,7 +56,7 @@ const PAL=[["Viral Yellow","VIRAL MOMENT","#FACC15"],["Neon Cyan","NEXT LEVEL","
 const FB=["WAIT FOR IT!","INSANE MOMENT!","YOU WON'T BELIEVE THIS!","THE BEST PART!","WATCH CLOSELY!"];
 const MT=["llm","asr"];
 let CL=[];
-const S={tab:"n",scr:"home",url:"",ai:1,cap:1,cs:0,hook:0,ht:"",n:3,len:"20s",fmt:"v",lay:"Auto",corner:"tr",rev:1,auto:1,dur:"Auto",fa:1,lang:"English",music:0,viral:1,mt:0,pct:0,help:0,swap:0,ey:50,esz:22,ecol:"#FACC15",etab:"Text",br:0,ct:0,zm:100,st:[],out:[],cp:[],M:null,dlp:{},err:{},busy:"",ei:0,eh:"",prm:"",info:null,title:"",t0:0,dcf:-1,file:null,src:"",vurl:"",aurl:"",abuf:null};
+const S={tab:"n",scr:"home",url:"",ai:1,cap:1,cs:0,hook:0,ht:"",n:3,len:"20s",fmt:"v",lay:"Auto",corner:"tr",rev:1,auto:1,dur:"Auto",fa:1,lang:"English",music:0,viral:1,mt:0,pct:0,help:0,swap:0,ey:50,esz:22,ecol:"#FACC15",etab:"Text",br:0,ct:0,zm:100,st:[],out:[],cp:[],M:null,dlp:{},err:{},note:{},busy:"",ei:0,eh:"",prm:"",info:null,title:"",t0:0,dcf:-1,file:null,src:"",vurl:"",aurl:"",abuf:null};
 let tm;
 const mb=n=>n>=1e9?(n/1e9).toFixed(1)+" GB":Math.round(n/1e6)+" MB";
 const fmt=s=>new Date(Math.max(0,s)*1e3).toISOString().substr(11,8);
@@ -72,8 +72,9 @@ function loadM(){if(!B)return;try{S.M=JSON.parse(B.models())}catch(e){S.M=null}}
 function act(k){const M=S.M;if(!M)return null;return M[k].find(m=>m.id==M.active[k])||null}
 const llmReady=()=>!!(B&&S.M&&S.M.engine&&act("llm"));
 const nInst=()=>S.M?S.M.llm.concat(S.M.asr).filter(m=>m.installed).length:0;
-window.onMdl=(id,d,t)=>{S.dlp[id]={d,t};if(S.scr=="mod")R()};
-window.onMdlEnd=(id,ok,msg)=>{delete S.dlp[id];if(ok||msg=="Cancelled")delete S.err[id];else S.err[id]=msg;loadM();toast(ok?"Model ready ✓":msg=="Cancelled"?"Download cancelled":"Download failed: "+msg);if(S.scr=="mod"||S.scr=="home")R()};
+window.onMdlNote=(id,m)=>{S.note[id]=m;if(S.scr=="mod")R()};
+window.onMdl=(id,d,t)=>{S.dlp[id]={d,t};if(d>0)delete S.note[id];if(S.scr=="mod")R()};
+window.onMdlEnd=(id,ok,msg)=>{delete S.dlp[id];delete S.note[id];if(ok||msg=="Cancelled")delete S.err[id];else S.err[id]=msg;loadM();toast(ok?"Model ready ✓":msg=="Cancelled"?"Download cancelled":"Download failed: "+msg);if(S.scr=="mod"||S.scr=="home")R()};
 
 /* ---------- screens ---------- */
 function layout(){const man=S.lay=="Set it myself";return`<div class="card">${head("▦","Layout","Choose how 9:16 clips are framed",'<button class="btn" data-a="help">? Help</button>')}<div class="body"><div class="chips">${["Auto","Set it myself","Full frame"].map(x=>ch("lay",x+(x=="Auto"?" (Recommended)":""),x)).join("")}</div>
@@ -121,7 +122,7 @@ function mrow(m,k){const d=S.dlp[m.id],a=S.M.active[k]==m.id,pc=d&&d.t>0?Math.mi
 if(d||m.busy)right=`<button class="btn r" data-a="mc" data-id="${m.id}">Cancel</button>`;
 else if(m.installed)right=(a?'<span class="pill">Active in App</span>':`<button class="btn gn" data-a="mu" data-id="${m.id}">Use</button>`)+`<button class="btn r" data-a="md" data-id="${m.id}" aria-label="Delete">🗑</button>`;
 else right=`<button class="btn" data-a="mg" data-id="${m.id}">Download (~${mb(m.approx)})</button>`;
-return`<div class="card" style="border-color:${a&&m.installed?"var(--gn)":"var(--bd)"}"><div class="rowb"><div style="flex:1"><b>${esc(m.name)}</b><small style="color:var(--mu)">${m.installed?"Installed • "+mb(m.size):"~"+mb(m.approx)}</small></div>${right}</div>${d?`<div class="prog"><i style="width:${pc}%"></i></div><small style="color:var(--mu)">${mb(d.d)} / ${d.t>0?mb(d.t):"?"} (${pc}%)</small>`:""}${S.err[m.id]?`<span class="err">${esc(S.err[m.id])}</span>`:""}</div>`}
+return`<div class="card" style="border-color:${a&&m.installed?"var(--gn)":"var(--bd)"}"><div class="rowb"><div style="flex:1"><b>${esc(m.name)}</b><small style="color:var(--mu)">${m.installed?"Installed • "+mb(m.size):"~"+mb(m.approx)}</small></div>${right}</div>${d?`<div class="prog"><i style="width:${pc}%"></i></div><small style="color:var(--mu)">${d.d>0?mb(d.d)+" / "+(d.t>0?mb(d.t)+" ("+pc+"%)":"?"):esc(S.note[m.id]||"Connecting...")}</small>${d.d>0&&S.note[m.id]?`<small style="color:var(--rd);display:block">${esc(S.note[m.id])}</small>`:""}`:""}${S.err[m.id]?`<span class="err">${esc(S.err[m.id])}</span>`:""}</div>`}
 function mod(){const k=MT[S.mt];
 return`<div class="bar"><button class="back" data-a="go" data-v="home">←</button><div class="ttl">AI Models &amp; Tools</div></div><div class="seg">${["Viral LLM (AI)","Speech Captions"].map((x,i)=>`<button class="${S.mt==i?"on":""}" data-a="s" data-k="mt" data-v="${i}">${x}</button>`).join("")}</div>
 ${!B?'<div class="warn">Model downloads run inside the ClipMe Android app.</div>':!S.M?'<div class="warn">Could not read model status. Reopen the app.</div>':(k=="llm"&&!S.M.engine?'<div class="warn">⚠ This build has no on-device LLM engine, so AI picks fall back to audio highlights. Rebuild with the native engine (see README).</div>':"")+S.M[k].map(m=>mrow(m,k)).join("")}
@@ -152,7 +153,7 @@ else if(a=="scan"){scan();return}
 else if(a=="st")S.st[+d.i]=+v;
 else if(a=="render"){if(!S.st.includes(1))return toast("Approve at least one clip");a2()}
 else if(a=="cancel"){S.cancel=1;S.scr="home"}
-else if(a=="mg"){if(!B)return;S.dlp[d.id]={d:0,t:0};delete S.err[d.id];B.mdlGet(d.id);toast("Downloading… keep the app open")}
+else if(a=="mg"){if(!B)return;S.dlp[d.id]={d:0,t:0};delete S.err[d.id];delete S.note[d.id];B.mdlGet(d.id);toast("Downloading… keep the app open")}
 else if(a=="mc"){B&&B.mdlCancel(d.id);toast("Cancelling…");return}
 else if(a=="mu"){B.mdlUse(d.id);loadM();toast("Now using this model")}
 else if(a=="md"){B.mdlDelete(d.id);loadM();toast("Model deleted")}

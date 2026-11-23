@@ -261,7 +261,7 @@ class MainActivity : Activity() {
             runOnUiThread { this@MainActivity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
             Thread {
                 try {
-                    Downloader.fetch(this@MainActivity, m, flag) { d, t -> js("onMdl('" + m.id + "'," + d + "," + t + ")") }
+                    Downloader.fetch(this@MainActivity, m, flag, { msg -> js("onMdlNote('" + m.id + "'," + JSONObject.quote(msg) + ")") }) { d, t -> js("onMdl('" + m.id + "'," + d + "," + t + ")") }
                     if ((prefs.getString("act_" + m.kind, "") ?: "").isEmpty()) prefs.edit().putString("act_" + m.kind, m.id).apply()
                     js("onMdlEnd('" + m.id + "',true,'')")
                 } catch (e: CancelledException) {
@@ -319,7 +319,7 @@ class MainActivity : Activity() {
                     if (m == null) {
                         m = Catalog.find(want[0])!!
                         js("onDlp('Downloading speech model (first time only)...')")
-                        Downloader.fetch(this@MainActivity, m, AtomicBoolean(false)) { d, t ->
+                        Downloader.fetch(this@MainActivity, m, AtomicBoolean(false), { _ -> }) { d, t ->
                             if (t > 0) js("onDlp('Speech model " + (d * 100 / t) + "%')")
                         }
                     }
