@@ -22,6 +22,7 @@ android {
 dependencies {
     implementation("io.github.junkfood02.youtubedl-android:library:[0.17.0,0.18.0)")
     implementation("io.github.junkfood02.youtubedl-android:ffmpeg:[0.17.0,0.18.0)")
+    implementation("org.opencv:opencv:4.9.0")
     implementation("com.alphacephei:vosk-android:0.3.47")
     implementation("net.java.dev.jna:jna:5.13.0@aar")
 }
