@@ -5,6 +5,7 @@ plugins {
 
 // -PwithLlama=false builds without the native LLM engine (CI uses this as a fallback).
 val withLlama = (project.findProperty("withLlama") as String?) != "false"
+val llamaTag = (project.findProperty("llamaTag") as String?) ?: "b5000"
 
 android {
     namespace = "com.clipme.app"
@@ -20,7 +21,7 @@ android {
             externalNativeBuild {
                 cmake {
                     cppFlags += "-std=c++17"
-                    arguments += listOf("-DCMAKE_BUILD_TYPE=Release")
+                    arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DLLAMA_TAG=$llamaTag")
                 }
             }
         }

@@ -14,21 +14,44 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.7"
-      # 1) Full build: includes the on-device LLM engine (llama.cpp compiled by the NDK).
+      # Pick a llama.cpp release tag that really exists
+      - name: Pick llama.cpp version
+        id: tag
+        run: |
+          T=$(git ls-remote --tags --refs https://github.com/ggml-org/llama.cpp 'refs/tags/b50*' | sed 's|.*refs/tags/||' | sort -V | head -1)
+          if [ -z "$T" ]; then T=b5000; fi
+          echo "Using llama.cpp tag $T"
+          echo "tag=$T" >> $GITHUB_OUTPUT
+      # 1) Full build with the on-device LLM engine
       - name: Build with on-device LLM
         id: full
         continue-on-error: true
-        run: gradle assembleDebug --no-daemon -PwithLlama=true
-      # 2) If the native part fails to compile, still give you a working app (no LLM engine).
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle assembleDebug --no-daemon -PwithLlama=true -PllamaTag=${{ steps.tag.outputs.tag }} 2>&1 | tee full.log
+      # 2) Fallback: app without the LLM engine
       - name: Fallback build without LLM engine
         if: steps.full.outcome == 'failure'
-        run: |
-          echo "::warning::Native LLM engine failed to build. Built the app WITHOUT it. Send me the log of the previous step."
-          gradle assembleDebug --no-daemon -PwithLlama=false
+        run: gradle assembleDebug --no-daemon -PwithLlama=false
       - name: Summary
+        if: always()
+        shell: bash
         run: |
-          if [ "${{ steps.full.outcome }}" = "success" ]; then echo "### Built WITH on-device LLM engine" >> $GITHUB_STEP_SUMMARY; else echo "### Built WITHOUT LLM engine (native build failed - see log)" >> $GITHUB_STEP_SUMMARY; fi
+          if [ "${{ steps.full.outcome }}" = "success" ]; then
+            echo "### Built WITH on-device LLM engine (llama.cpp ${{ steps.tag.outputs.tag }})" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### Built WITHOUT LLM engine. Native build failed. Key error lines:" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            grep -n -i -E "CMake Error|fatal:|Could NOT|error:|No such file|not found|undefined reference|Remote branch" full.log | grep -v -E "^\s*[0-9]+:\s+at " | head -40 >> $GITHUB_STEP_SUMMARY || true
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: ClipMe-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-log
+          path: full.log
