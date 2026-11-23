@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.ClipboardManager
 import android.content.ContentValues
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
@@ -18,6 +19,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.view.WindowManager
 import android.widget.Toast
 import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
@@ -37,8 +39,10 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FilterInputStream
 import java.io.InputStream
-import java.net.URL
-import java.util.zip.ZipInputStream
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : Activity() {
     lateinit var wv: WebView
@@ -47,11 +51,24 @@ class MainActivity : Activity() {
     var rec: Recognizer? = null
     var words = JSONArray()
     var det: FaceDetectorYN? = null
+    var loadedAsr = ""
+    private val prefs by lazy { getSharedPreferences("clipme", MODE_PRIVATE) }
+    private val cancels = ConcurrentHashMap<String, AtomicBoolean>()
+    private val ytReady = CountDownLatch(1)
+    @Volatile private var ytErr: String? = null
+
+    fun activeId(kind: String): String {
+        val all = if (kind == "llm") Catalog.llm else Catalog.asr
+        val saved = prefs.getString("act_$kind", "") ?: ""
+        val ok = all.firstOrNull { it.id == saved && ModelStore.installed(this, it) }
+        return ok?.id ?: all.firstOrNull { ModelStore.installed(this, it) }?.id ?: ""
+    }
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         OpenCVLoader.initLocal()
         wv = WebView(this)
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) WebView.setWebContentsDebuggingEnabled(true)
         setContentView(wv)
         wv.settings.javaScriptEnabled = true
         wv.settings.domStorageEnabled = true
@@ -120,8 +137,11 @@ class MainActivity : Activity() {
             try {
                 YoutubeDL.getInstance().init(application)
                 FFmpeg.getInstance().init(application)
-            } catch (e: Exception) {}
-            try { YoutubeDL.getInstance().updateYoutubeDL(application) } catch (e: Exception) {}
+            } catch (e: Throwable) {
+                ytErr = e.message ?: e.toString()
+            }
+            ytReady.countDown()
+            if (ytErr == null) try { YoutubeDL.getInstance().updateYoutubeDL(application) } catch (e: Throwable) {}
         }.start()
     }
 
@@ -153,6 +173,8 @@ class MainActivity : Activity() {
         fun fetch(url: String, live: Int) {
             Thread {
                 try {
+                    ytReady.await(90, TimeUnit.SECONDS)
+                    ytErr?.let { throw IllegalStateException("Downloader could not start: $it") }
                     val dir = File(cacheDir, "dl")
                     dir.deleteRecursively(); dir.mkdirs()
                     val r = YoutubeDLRequest(url)
@@ -164,6 +186,7 @@ class MainActivity : Activity() {
                     r.addOption("-x")
                     r.addOption("--audio-format", "wav")
                     r.addOption("-k")
+                    r.addOption("--write-info-json")      // gives us title, duration and "most replayed" heatmap
                     r.addOption("--postprocessor-args", "ExtractAudio:-ar 16000 -ac 1")
                     if (live == 1) {
                         r.addOption("--downloader", "ffmpeg")
@@ -172,12 +195,115 @@ class MainActivity : Activity() {
                         r.addOption("--download-sections", "*0-1800")
                     }
                     YoutubeDL.getInstance().execute(r, callback = { p, _, _ ->
-                        js("onDlp('Downloading " + p.toInt() + "%')")
+                        js("onDlp('Downloading " + p.toInt().coerceIn(0, 100) + "%')")
                     })
                     val f = dir.listFiles()?.firstOrNull { it.name.startsWith("video.") && it.extension in listOf("mp4", "mkv", "webm", "mov") }
-                    if (f != null && File(dir, "video.wav").exists()) js("onDl('" + f.name + "')") else js("onDl('')")
-                } catch (e: Exception) {
-                    js("onDl('')")
+                    if (f != null && File(dir, "video.wav").exists()) js("onDl('" + f.name + "','')")
+                    else js("onDl('',${JSONObject.quote("Nothing was downloaded (private, age-restricted or members-only video?)")})")
+                } catch (e: Throwable) {
+                    val msg = (e.message ?: e.toString()).trim().takeLast(160)
+                    js("onDl('',${JSONObject.quote(msg)})")
+                }
+            }.start()
+        }
+
+        /** Title, duration and "most replayed" heatmap of the video fetched by fetch(). */
+        @JavascriptInterface
+        fun info(): String {
+            try {
+                val f = File(File(cacheDir, "dl"), "video.info.json")
+                if (!f.exists()) return "null"
+                val j = JSONObject(f.readText())
+                val o = JSONObject()
+                o.put("title", j.optString("title"))
+                o.put("duration", j.optDouble("duration", 0.0))
+                val hm = j.optJSONArray("heatmap")
+                val arr = JSONArray()
+                if (hm != null) for (i in 0 until hm.length()) {
+                    val h = hm.getJSONObject(i)
+                    arr.put(JSONArray().put(h.optDouble("start_time")).put(h.optDouble("end_time")).put(h.optDouble("value")))
+                }
+                o.put("heatmap", arr)
+                return o.toString()
+            } catch (e: Throwable) {
+                return "null"
+            }
+        }
+
+        // ---------- model manager (LLM + speech) ----------
+        @JavascriptInterface
+        fun models(): String {
+            fun arr(list: List<ModelInfo>): JSONArray {
+                val a = JSONArray()
+                for (m in list) {
+                    a.put(JSONObject()
+                        .put("id", m.id).put("name", m.name).put("approx", m.approxBytes)
+                        .put("installed", ModelStore.installed(this@MainActivity, m))
+                        .put("size", ModelStore.sizeOnDisk(this@MainActivity, m))
+                        .put("busy", cancels.containsKey(m.id)))
+                }
+                return a
+            }
+            val o = JSONObject()
+            o.put("llm", arr(Catalog.llm))
+            o.put("asr", arr(Catalog.asr))
+            o.put("active", JSONObject().put("llm", activeId("llm")).put("asr", activeId("asr")))
+            o.put("engine", LlmEngine.loaded)
+            return o.toString()
+        }
+
+        @JavascriptInterface
+        fun mdlGet(id: String) {
+            val m = Catalog.find(id) ?: return
+            if (cancels.containsKey(id)) return
+            val flag = AtomicBoolean(false)
+            cancels[id] = flag
+            runOnUiThread { this@MainActivity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+            Thread {
+                try {
+                    Downloader.fetch(this@MainActivity, m, flag) { d, t -> js("onMdl('" + m.id + "'," + d + "," + t + ")") }
+                    if ((prefs.getString("act_" + m.kind, "") ?: "").isEmpty()) prefs.edit().putString("act_" + m.kind, m.id).apply()
+                    js("onMdlEnd('" + m.id + "',true,'')")
+                } catch (e: CancelledException) {
+                    js("onMdlEnd('" + m.id + "',false,'Cancelled')")
+                } catch (e: Throwable) {
+                    js("onMdlEnd('" + m.id + "',false," + JSONObject.quote(e.message ?: e.toString()) + ")")
+                } finally {
+                    cancels.remove(id)
+                    if (cancels.isEmpty()) runOnUiThread { this@MainActivity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+                }
+            }.start()
+        }
+
+        @JavascriptInterface
+        fun mdlCancel(id: String) { cancels[id]?.set(true) }
+
+        @JavascriptInterface
+        fun mdlUse(id: String) {
+            val m = Catalog.find(id) ?: return
+            if (ModelStore.installed(this@MainActivity, m)) prefs.edit().putString("act_" + m.kind, id).apply()
+        }
+
+        @JavascriptInterface
+        fun mdlDelete(id: String) {
+            val m = Catalog.find(id) ?: return
+            cancels[id]?.set(true)
+            if (m.kind == "asr" && loadedAsr == id) { try { model?.close() } catch (e: Throwable) {}; model = null; loadedAsr = "" }
+            ModelStore.delete(this@MainActivity, m)
+        }
+
+        /** Ask the on-device LLM one question. Answer arrives via onLlm(token, ok, text). */
+        @JavascriptInterface
+        fun llmRun(id: String, sys: String, user: String, maxTok: Int, token: String) {
+            Thread {
+                try {
+                    val m = Catalog.find(id) ?: throw IllegalStateException("No AI model selected")
+                    val f = ModelStore.file(this@MainActivity, m)
+                    if (!f.exists()) throw IllegalStateException("Model is not downloaded")
+                    val text = LlmEngine.run(f.absolutePath, LlmEngine.format(m.template, sys, user), maxTok)
+                    js("onLlm('" + token + "',true," + JSONObject.quote(text) + ")")
+                } catch (e: Throwable) {
+                    js("onLlm('" + token + "',false," + JSONObject.quote(e.message ?: e.toString()) + ")")
                 }
             }.start()
         }
@@ -186,29 +312,24 @@ class MainActivity : Activity() {
         fun prep(lang: String) {
             Thread {
                 try {
-                    val name = if (lang == "hi") "vosk-model-small-hi-0.22" else "vosk-model-small-en-us-0.15"
-                    val dir = File(filesDir, name)
-                    if (!File(dir, "am").exists()) {
-                        js("onDlp('Downloading caption model (first time only)...')")
-                        val z = File(cacheDir, "m.zip")
-                        URL("https://alphacephei.com/vosk/models/$name.zip").openStream().use { i -> z.outputStream().use { o -> i.copyTo(o) } }
-                        ZipInputStream(z.inputStream()).use { zi ->
-                            var e = zi.nextEntry
-                            while (e != null) {
-                                val f = File(filesDir, e.name)
-                                if (e.isDirectory) f.mkdirs() else {
-                                    f.parentFile?.mkdirs()
-                                    f.outputStream().use { zi.copyTo(it) }
-                                }
-                                e = zi.nextEntry
-                            }
+                    val want = if (lang == "hi") listOf("vosk_hi") else listOf("vosk_en_in", "vosk_en_us")
+                    val act = activeId("asr")
+                    var m: ModelInfo? = Catalog.asr.firstOrNull { it.id == act && it.id in want }
+                        ?: Catalog.asr.firstOrNull { it.id in want && ModelStore.installed(this@MainActivity, it) }
+                    if (m == null) {
+                        m = Catalog.find(want[0])!!
+                        js("onDlp('Downloading speech model (first time only)...')")
+                        Downloader.fetch(this@MainActivity, m, AtomicBoolean(false)) { d, t ->
+                            if (t > 0) js("onDlp('Speech model " + (d * 100 / t) + "%')")
                         }
-                        z.delete()
                     }
-                    model?.close()
-                    model = Model(dir.absolutePath)
+                    if (loadedAsr != m.id || model == null) {
+                        model?.close()
+                        model = Model(File(filesDir, m.file).absolutePath)
+                        loadedAsr = m.id
+                    }
                     js("onModel(true)")
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     js("onModel(false)")
                 }
             }.start()
@@ -277,26 +398,51 @@ class MainActivity : Activity() {
             }
         }
 
+        /** Saves a rendered clip to Downloads/ClipMe. Returns its content:// uri ("" if not shareable). */
         @JavascriptInterface
-        fun save(b64: String, name: String) {
+        fun save(b64: String, name: String, mime: String): String {
             try {
                 val data = Base64.decode(b64, Base64.DEFAULT)
                 if (Build.VERSION.SDK_INT >= 29) {
                     val v = ContentValues()
                     v.put(MediaStore.Downloads.DISPLAY_NAME, name)
-                    v.put(MediaStore.Downloads.MIME_TYPE, "video/webm")
+                    v.put(MediaStore.Downloads.MIME_TYPE, mime)
                     v.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/ClipMe")
                     val u = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v)!!
                     contentResolver.openOutputStream(u)!!.use { it.write(data) }
                     toast("Saved to Downloads/ClipMe")
+                    return u.toString()
                 } else {
                     val dir = getExternalFilesDir(Environment.DIRECTORY_MOVIES)!!
                     File(dir, name).writeBytes(data)
                     toast("Saved to " + dir.absolutePath)
+                    return ""
                 }
             } catch (e: Exception) {
                 toast("Save failed: " + e.message)
+                return ""
             }
+        }
+
+        @JavascriptInterface
+        fun share(uri: String) {
+            runOnUiThread {
+                try {
+                    val u = Uri.parse(uri)
+                    val i = Intent(Intent.ACTION_SEND)
+                    i.type = contentResolver.getType(u) ?: "video/*"
+                    i.putExtra(Intent.EXTRA_STREAM, u)
+                    i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    startActivity(Intent.createChooser(i, "Share clip"))
+                } catch (e: Exception) {
+                    toast("Couldn't open share sheet: " + e.message)
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun del(uri: String) {
+            try { contentResolver.delete(Uri.parse(uri), null, null) } catch (e: Exception) {}
         }
     }
 }

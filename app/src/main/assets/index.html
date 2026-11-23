@@ -41,111 +41,240 @@
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:grid;place-items:center;z-index:8;padding:20px}.modal .card{max-width:380px}
 .fab{position:fixed;right:max(14px,calc(50% - 246px));bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--pu);color:#fff;border:0;border-radius:26px;padding:14px 18px;font:inherit;font-weight:800;cursor:pointer}
 .nw{font-size:10px;font-weight:800;background:var(--am);color:#fff;border-radius:6px;padding:1px 6px;margin-left:6px}
+.warn{background:var(--at);color:var(--am);border-radius:12px;padding:10px;font-weight:600;font-size:13px;margin-bottom:12px}
+.err{color:var(--rd);font-size:12.5px;display:block;margin-top:6px}
+.cta.busy{background:#9CA3AF;pointer-events:none}
+.rowb{display:flex;gap:8px;align-items:center}
+.btn.sm{padding:7px 10px;font-size:13px}
 </style></head><body><div id="app"></div><div id="t"></div>
 <script>
-const CL=[["Last-second clutch steals the round","01:14:20 – 01:15:20","🔥 6.2% Chat Spike",94,"Peak chat burst and crowd noise"],["Streamer loses it after jump scare","00:48:05 – 00:48:35","😱 Facecam: Shocked",88,"Strong facial reaction, clear audio"],["Chat spams LOL over fail","02:03:10 – 02:03:40","😂 Funny Scene",81,"Laugh emotes spike 4x"],["1v4 fight ends in a draw","00:22:40 – 00:23:00","🥊 Fight Detected",76,"Motion and audio spike"]];
-const MOD=[[["Phi-3 Mini (Fast)","~400 MB",1],["Gemma 2 2B (Recommended)","~1.5 GB",0],["Llama 3.2 3B (High Quality)","~2 GB",0]],[["Vosk Indian English","~36 MB",1],["Vosk Hindi & Regional","~42 MB",0],["Vosk Global English","~40 MB",0]]];
-const S={tab:"n",scr:"home",url:"",ai:1,cap:1,cs:0,hook:0,ht:"",n:3,len:"20s",fmt:"v",lay:"Auto",rev:1,auto:1,dur:"Auto",th:5,fi:1,fu:1,fa:1,lang:"English",music:0,viral:1,mt:0,pct:0,help:0,swap:0,etxt:"Heyy here please",ey:50,esz:22,ecol:"#FFFFFF",etab:"Text",br:0,ct:0,zm:100,st:CL.map(()=>0),mod:MOD.map(a=>a.map(m=>m[2]))};
-let tm,iv;const $=q=>document.querySelector(q);
-function toast(m){clearTimeout(tm);$("#t").innerHTML='<div class="toast">'+m+'</div>';tm=setTimeout(()=>$("#t").innerHTML="",2200)}
+"use strict";
+const B=window.AndroidBridge||null;
+const $=q=>document.querySelector(q);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const PAL=[["Viral Yellow","VIRAL MOMENT","#FACC15"],["Neon Cyan","NEXT LEVEL","#22D3EE"],["High Energy Lime","INSANE REACTION","#A3E635"],["Sunset Amber","MUST WATCH","#FB923C"]];
+const FB=["WAIT FOR IT!","INSANE MOMENT!","YOU WON'T BELIEVE THIS!","THE BEST PART!","WATCH CLOSELY!"];
+const MT=["llm","asr"];
+let CL=[];
+const S={tab:"n",scr:"home",url:"",ai:1,cap:1,cs:0,hook:0,ht:"",n:3,len:"20s",fmt:"v",lay:"Auto",corner:"tr",rev:1,auto:1,dur:"Auto",fa:1,lang:"English",music:0,viral:1,mt:0,pct:0,help:0,swap:0,ey:50,esz:22,ecol:"#FACC15",etab:"Text",br:0,ct:0,zm:100,st:[],out:[],cp:[],M:null,dlp:{},err:{},busy:"",ei:0,eh:"",prm:"",info:null,title:"",t0:0,dcf:-1,file:null,src:"",vurl:"",aurl:"",abuf:null};
+let tm;
+const mb=n=>n>=1e9?(n/1e9).toFixed(1)+" GB":Math.round(n/1e6)+" MB";
+const fmt=s=>new Date(Math.max(0,s)*1e3).toISOString().substr(11,8);
+const key=()=>S.url+"|"+S.tab;
+function toast(m){clearTimeout(tm);$("#t").innerHTML='<div class="toast">'+esc(m)+'</div>';tm=setTimeout(()=>$("#t").innerHTML="",2800)}
 const tg=(k,c="")=>`<button class="tg ${c} ${S[k]?"on":""}" data-a="t" data-k="${k}" aria-label="toggle"></button>`;
 const ch=(k,l,v,c="")=>`<button class="ch ${c} ${S[k]===v?"on":""}" data-a="s" data-k="${k}" data-v="${v}">${l}</button>`;
 const head=(i,t,s,x="")=>`<div class="row"><div class="ic">${i}</div><div style="flex:1"><h3>${t}</h3><small>${s}</small></div>${x}</div>`;
-const lenCta=()=>S.tab=="n"?`Scan &amp; Preview ${S.n} Clip${S.n>1?"s":""} (${S.len})`:"Start Monitoring Live Chat";
-function layout(){return`<div class="card">${head("▦","Layout","Choose how 9:16 clips are framed",'<button class="btn" data-a="help">? Help</button>')}<div class="body"><div class="chips">${["Auto","Set it myself","Full frame"].map(x=>ch("lay",x+(x=="Auto"?" (Recommended)":""),x)).join("")}</div>
-${S.lay=="Auto"?`<div class="frame"><div>Gameplay</div><i class="seam"></i><div>Facecam</div><b>VIRAL MOMENT</b></div><small style="color:var(--mu)">50/50 split with captions on the centre seam.</small>`:S.lay=="Full frame"?`<div class="frame"><div style="background:#444">Person, cropped vertically</div></div>`:`<div class="frame" style="max-width:230px;aspect-ratio:16/9;flex-direction:row"><div style="border:3px solid #FACC15;margin:8px">Game box</div><div style="border:3px solid #EC4899;margin:8px">You</div></div><button class="btn" data-a="swap">⇅ Swap</button> <small style="color:var(--mu)">${S.swap?"Streamer on top":"Streamer on bottom"}. Applies to every clip from this link.</small>`}</div></div>`}
-function captions(){return`<div class="card">${head("CC","Dynamic Auto-Captions","Word-by-word on-device subtitles",tg("cap"))}${S.cap?`<div class="body"><div class="chips">${[["Viral Yellow","VIRAL MOMENT","#FACC15"],["Neon Cyan","NEXT LEVEL","#22D3EE"],["High Energy Lime","INSANE REACTION","#A3E635"],["Sunset Amber","MUST WATCH","#FB923C"]].map((c,i)=>`<div class="cap ${S.cs==i?"on":""}" style="color:${c[2]}" data-a="s" data-k="cs" data-v="${i}">${c[1]}</div>`).join("")}</div>
-<p style="margin:10px 0 6px;font-weight:700">Caption language<span class="nw">NEW</span></p><div class="chips">${["English","Hindi","Hinglish"].map(x=>ch("lang",x,x)).join("")}</div><div style="margin-top:10px"><span class="pill">Offline Vosk Speech Tool Installed (50MB)</span></div></div>`:""}</div>`}
-function hook(){return`<div class="card">${head("T","Hook Title Header","Viral text on top area",tg("hook"))}${S.hook?`<div class="body"><div class="note">AI Auto-Hook Active: LLM generates custom viral hooks per clip</div><div class="chips" style="margin:10px 0">${["WAIT FOR IT! 😱🔥","HE DID NOT EXPECT THIS! 😂💀","INSTANT KARMA! 🤯","UNREAL 1000 IQ PLAY! 🔥","MUST WATCH TILL END! 🔥🎬"].map(x=>ch("ht",x,x)).join("")}</div><input type="text" placeholder="Or type your own hook" value="${S.ht}" data-a="in" data-k="ht"></div>`:""}</div>`}
-function extras(){return`<div class="card">${head("★","New: Creator Extras","Added on top of the original",'<span class="nw">NEW</span>')}<div class="body"><div class="row" style="margin-bottom:10px"><div style="flex:1"><b>Viral Score (0–100)</b><small style="color:var(--mu)">Rank every clip and explain why</small></div>${tg("viral")}</div><div class="row"><div style="flex:1"><b>Auto Background Music</b><small style="color:var(--mu)">Beat-matched, copyright-safe</small></div>${tg("music","g")}</div></div></div>`}
-function home(){const L=S.tab=="l",v=S.url.length>6||S.file;
-return`<div class="bar"><div class="logo">▶</div><div><div class="ttl">ClipMe</div></div><div class="sp"></div><button class="ib" data-a="go" data-v="lib" aria-label="My clips">🎞</button><button class="ib" data-a="go" data-v="mod" aria-label="AI models">🧠<span class="bd">4</span></button></div>
+const lenCta=()=>S.tab=="n"?`Scan &amp; Preview ${S.n} Clip${S.n>1?"s":""} (${S.len})`:"Record 5 min &amp; find clips";
+
+/* ---------- models (real state comes from the Android side) ---------- */
+function loadM(){if(!B)return;try{S.M=JSON.parse(B.models())}catch(e){S.M=null}}
+function act(k){const M=S.M;if(!M)return null;return M[k].find(m=>m.id==M.active[k])||null}
+const llmReady=()=>!!(B&&S.M&&S.M.engine&&act("llm"));
+const nInst=()=>S.M?S.M.llm.concat(S.M.asr).filter(m=>m.installed).length:0;
+window.onMdl=(id,d,t)=>{S.dlp[id]={d,t};if(S.scr=="mod")R()};
+window.onMdlEnd=(id,ok,msg)=>{delete S.dlp[id];if(ok||msg=="Cancelled")delete S.err[id];else S.err[id]=msg;loadM();toast(ok?"Model ready ✓":msg=="Cancelled"?"Download cancelled":"Download failed: "+msg);if(S.scr=="mod"||S.scr=="home")R()};
+
+/* ---------- screens ---------- */
+function layout(){const man=S.lay=="Set it myself";return`<div class="card">${head("▦","Layout","Choose how 9:16 clips are framed",'<button class="btn" data-a="help">? Help</button>')}<div class="body"><div class="chips">${["Auto","Set it myself","Full frame"].map(x=>ch("lay",x+(x=="Auto"?" (Recommended)":""),x)).join("")}</div>
+${S.lay=="Auto"?`<div class="frame"><div>Gameplay</div><i class="seam"></i><div>Facecam</div><b>VIRAL MOMENT</b></div><small style="color:var(--mu)">Video on top, the detected face on the bottom, captions on the centre seam.</small>`:S.lay=="Full frame"?`<div class="frame"><div style="background:#444">Person, cropped vertically</div></div>`:`<p style="margin:10px 0 6px;font-weight:700">Where is the facecam in your video?</p><div class="grid g4">${[["tl","↖ Top-left"],["tr","↗ Top-right"],["bl","↙ Bottom-left"],["br","↘ Bottom-right"]].map(c=>ch("corner",c[1],c[0])).join("")}</div><div class="row" style="margin-top:10px"><button class="btn" data-a="swap">⇅ Swap</button> <small style="color:var(--mu)">${S.swap?"Facecam on top":"Facecam on bottom"}. Applies to every clip from this link.</small></div>`}</div></div>`}
+function captions(){const sm=act("asr");return`<div class="card">${head("CC","Dynamic Auto-Captions","Word-by-word on-device subtitles",tg("cap"))}${S.cap?`<div class="body"><div class="chips">${PAL.map((c,i)=>`<div class="cap ${S.cs==i?"on":""}" style="color:${c[2]}" data-a="cs" data-v="${i}">${c[1]}</div>`).join("")}</div>
+<p style="margin:10px 0 6px;font-weight:700">Caption language<span class="nw">NEW</span></p><div class="chips">${["English","Hindi","Hinglish"].map(x=>ch("lang",x,x)).join("")}</div><div style="margin-top:10px">${!B?'<span class="pill" style="background:var(--at);color:var(--am)">Captions work in the Android app</span>':sm?`<span class="pill">Speech model: ${esc(sm.name)}</span>`:`<button class="btn sm" data-a="go" data-v="mod" data-mt="1">⬇ Get speech model (~40 MB)</button>`}</div></div>`:""}</div>`}
+function hook(){const ai=llmReady();return`<div class="card">${head("T","Hook Title Header","Viral text on top area",tg("hook"))}${S.hook?`<div class="body"><div class="note">${ai?"AI Auto-Hook Active: the LLM writes a hook for each clip":"Auto-hook uses preset hooks. Download an AI model to get a custom hook per clip."}</div><div class="chips" style="margin:10px 0">${["WAIT FOR IT! 😱🔥","HE DID NOT EXPECT THIS! 😂💀","INSTANT KARMA! 🤯","UNREAL 1000 IQ PLAY! 🔥","MUST WATCH TILL END! 🔥🎬"].map(x=>ch("ht",x,x)).join("")}</div><input type="text" placeholder="Or type your own hook (same for every clip)" value="${esc(S.ht)}" data-a="in" data-k="ht"><small style="color:var(--mu)">Leave empty to let the AI write one per clip.</small></div>`:""}</div>`}
+function extras(){return`<div class="card">${head("★","New: Creator Extras","Added on top of the original",'<span class="nw">NEW</span>')}<div class="body"><div class="row" style="margin-bottom:10px"><div style="flex:1"><b>Viral Score (0–100)</b><small style="color:var(--mu)">Rank every clip and explain why</small></div>${tg("viral")}</div><div class="row"><div style="flex:1"><b>Auto Background Music</b><small style="color:var(--mu)">Generated beat, no copyright issues</small></div>${tg("music","g")}</div></div></div>`}
+function brain(){return`<div class="card">${head("🧠","Train your offline AI","Tell it what a good clip is",'<span class="nw">NEW</span>')}<div class="body"><textarea data-a="in" data-k="prm" rows="3" style="width:100%;border:1px solid var(--bd);background:var(--bg);color:var(--tx);border-radius:12px;padding:12px;font:inherit">${esc(S.prm)}</textarea><div class="row" style="margin-top:8px"><button class="btn" data-a="train">Save &amp; train</button><small style="color:var(--mu)">Try: skip first 30, calm, quiet, loud. The AI model also reads your words.</small></div></div></div>`}
+function home(){const L=S.tab=="l",v=S.url.length>6||S.file,am=act("llm"),cl=S.busy?"busy":v?"":"off";
+return`<div class="bar"><div class="logo">▶</div><div><div class="ttl">ClipMe</div></div><div class="sp"></div><button class="ib" data-a="go" data-v="lib" aria-label="My clips">🎞</button><button class="ib" data-a="go" data-v="mod" aria-label="AI models">🧠${nInst()?`<span class="bd">${nInst()}</span>`:""}</button></div>
 <div class="seg"><button class="${!L?"on":""}" data-a="s" data-k="tab" data-v="n">🎬 Normal Video</button><button class="${L?"on l":""}" data-a="s" data-k="tab" data-v="l">📡 Live Stream</button></div>
-<p class="sub">${L?"Auto-detect fights, funny moments, facecam reactions, and 5%+ viewer chat spikes in real time.":"Turn long online video streams into viral clips automatically."}</p>
-<div class="card ${L?"live":""}">${head(L?"🔴":"🔗",L?"Live Stream Link":"Video Stream URL","")}<div class="body row"><input type="text" id="url" placeholder="${L?"Paste live stream link here...":"Paste video or stream link here..."}" value="${S.url}" data-a="in" data-k="url"><button class="ib" data-a="paste" aria-label="Paste">📋</button></div></div>
-${L?`<div class="card">${head("✨","Auto-Clip on Hype Spikes","Starts 10s before peak moment &amp; queues for preview",tg("auto","a"))}${S.auto?`<div class="body"><div class="chips">${["10s (Short)","20s (Reel)","30s (Viral)","60s (Full)","Auto"].map(x=>ch("dur",x,x)).join("")}</div>
-<p style="margin:12px 0 6px;font-weight:700">Chat Hype Trigger (% of Live Viewers)</p><div class="row"><button class="btn" data-a="th" data-v="-1">−</button><b style="flex:1;text-align:center;color:var(--am);font-size:20px">${S.th}%</b><button class="btn" data-a="th" data-v="1">+</button></div><small style="color:var(--mu)">Triggers when ≥ ${S.th}% of viewers comment in a burst (${S.th*10}+ comments for 1,000 viewers).</small>
-<div class="chips" style="margin-top:12px">${[["fi","🥊 Fight / Action"],["fu","😂 Funny"],["fa","😱 Face Check"]].map(x=>`<button class="ch ${S[x[0]]?"on":""}" data-a="t" data-k="${x[0]}">${x[1]}</button>`).join("")}</div></div>`:""}</div>
+<p class="sub">${L?"Records 5 minutes of a live stream, then finds the best moments (loudness, facecam reactions and AI).":"Turn long online video streams into viral clips automatically."}</p>
+<div class="card ${L?"live":""}">${head(L?"🔴":"🔗",L?"Live Stream Link":"Video Stream URL","")}<div class="body row"><input type="text" id="url" placeholder="${L?"Paste live stream link here...":"Paste video or stream link here..."}" value="${esc(S.url)}" data-a="in" data-k="url"><button class="ib" data-a="paste" aria-label="Paste">📋</button></div>${L?"":`<div style="margin-top:10px"><label class="btn" style="display:block;text-align:center"><input type="file" id="vf" accept="video/*" style="display:none">📁 Or choose a video from your phone${S.file&&S.file.name?" ✓ "+esc(S.file.name.slice(0,24)):""}</label></div>`}</div>
+${L?`<div class="card">${head("✨","Auto-Clip on Hype Spikes","Finds the loudest moments in the recording &amp; queues them for preview",tg("auto","a"))}${S.auto?`<div class="body"><div class="chips">${["10s (Short)","20s (Reel)","30s (Viral)","60s (Full)","Auto"].map(x=>ch("dur",x,x)).join("")}</div><div class="chips" style="margin-top:12px">${`<button class="ch ${S.fa?"on":""}" data-a="t" data-k="fa">😱 Face Check (prefer moments with a face)</button>`}</div></div>`:""}</div>
 <div class="card">${head("✔","Review Before Rendering","Pass or Reject clips first",tg("rev","g"))}</div>`:
-`<div class="card">${head("🧠","AI Viral Analysis",S.ai?"Use on-device LLM model":"Using fast community highlight",tg("ai"))}${S.ai?`<div class="body"><div class="row ch on" style="width:100%" data-a="go" data-v="mod">● <div style="flex:1"><b>Phi-3 Mini (Fast)</b><small style="color:var(--mu)">~400 MB • On-Device GGUF</small></div>✓</div></div>`:""}</div>`}
+`<div class="card">${head("🧠","AI Viral Analysis",S.ai?(!B?"AI runs in the Android app":S.M&&!S.M.engine?"LLM engine missing in this build":am?"Use on-device LLM model":"No AI model downloaded yet"):"Using fast community highlight",tg("ai"))}${S.ai&&B?`<div class="body">${am?`<div class="row ch on" style="width:100%" data-a="go" data-v="mod">● <div style="flex:1"><b>${esc(am.name)}</b><small style="color:var(--mu)">${mb(am.size)} • On-Device GGUF</small></div>✓</div>`:`<button class="btn" style="width:100%" data-a="go" data-v="mod">⬇ Download an AI model</button>`}</div>`:""}</div>`}
 ${brain()}${captions()}${hook()}
 ${L?"":`<div class="card"><b>Number of Viral Clips</b><div class="grid g5" style="margin-top:8px">${[1,2,3,4,5].map(x=>ch("n",x+(x>1?" Clips":" Clip"),x)).join("")}</div></div>
 <div class="card"><b>Clip Length</b><div class="grid g4" style="margin-top:8px">${["20s / Fast","30s / Viral","40s / Story","60s / Full"].map(x=>ch("len",x,x.split(" ")[0])).join("")}</div></div>`}
 <div class="card"><b>Output Format</b><div class="chips" style="margin-top:8px">${ch("fmt","Vertical Shorts / Reels (9:16)","v")}${ch("fmt","Landscape (16:9)","h")}</div></div>
 ${S.fmt=="v"?layout():""}${extras()}
 ${L?"":`<div class="card">${head("✔","Review Before Rendering","Preview clips to Pass or Reject before final export (saves rendering time)",tg("rev","g"))}</div>`}
-${L?`<button class="cta l" data-a="scan">Record 5 min &amp; find clips</button>`:`<button class="cta ${v?"":"off"}" id="cta" data-a="scan">${lenCta()}</button>`}
-
+<button class="cta ${L?"l ":""}${cl}" id="cta" data-a="scan">${esc(S.busy)||lenCta()}</button>
 `}
 function rev(){const a=S.st.filter(x=>x==1).length,r=S.st.filter(x=>x==2).length;
 return`<div class="bar"><button class="back" data-a="go" data-v="home">←</button><div><div class="ttl">Review Detected Clips</div><small style="color:var(--mu)">Approve clips to render • Reject to skip</small></div></div>
 <div class="row" style="margin-bottom:12px"><span class="stat"><b>${S.st.length-a-r}</b>Pending</span><span class="stat"><b style="color:var(--gn)">${a}</b>Approved</span><span class="stat"><b style="color:var(--rd)">${r}</b>Rejected</span></div>
-${CL.map((c,i)=>`<div class="card" style="${S.st[i]==1?"border-color:var(--gn)":S.st[i]==2?"opacity:.55":""}"><div class="row" style="align-items:flex-start"><div class="frame" style="width:70px;margin:0;flex:none"><div>▶</div><i class="seam"></i><div></div><b style="font-size:8px">WORD</b></div><div style="flex:1"><b>${c[0]}</b><div style="margin:6px 0"><span class="pill">${c[2]}</span></div><small style="color:var(--mu)">${c[1]}</small></div></div>
-${S.viral?`<div class="row" style="margin-top:8px"><span class="sc">Viral score ${c[3]}</span><small style="color:var(--mu)">${c[4]}</small></div>`:""}
+${CL.map((c,i)=>`<div class="card" style="${S.st[i]==1?"border-color:var(--gn)":S.st[i]==2?"opacity:.55":""}"><div class="row" style="align-items:flex-start"><div class="frame" style="width:70px;margin:0;flex:none"><div>▶</div><i class="seam"></i><div></div><b style="font-size:8px">${esc((c.text||"").split(" ")[0]||"")}</b></div><div style="flex:1"><b>${esc(c.hook)}</b><div style="margin:6px 0"><span class="pill">${c.tag}</span></div><small style="color:var(--mu)">${fmt(c.s)} – ${fmt(c.s+c.l)}</small>${c.text?`<small style="color:var(--mu);display:block;margin-top:4px">“${esc(c.text.slice(0,110))}${c.text.length>110?"…":""}”</small>`:""}</div></div>
+${S.viral?`<div class="row" style="margin-top:8px"><span class="sc">Viral score ${c.score}</span><small style="color:var(--mu)">${esc(c.why)}</small></div>`:""}
 <div class="row" style="margin-top:10px"><button class="btn r" style="flex:1" data-a="st" data-i="${i}" data-v="2">✕ Reject</button><button class="btn gn" style="flex:1" data-a="st" data-i="${i}" data-v="1">✓ Approve</button></div></div>`).join("")}
 <button class="cta ${a?"g":"off"}" data-a="render">Render Approved Clips (${a})</button>`}
-function prog(){const p=S.pct,eta=Math.max(0,Math.round((100-p)*.9)),st=["Stream Fetch &amp; Audio Extract","AI Viral, Fight &amp; Facecam Scan","Vosk Auto-Captions Generation","FFmpeg Split &amp; Seam Subtitle Burn-in"],th=[25,50,75,100];
+function prog(){const p=S.pct,el=Math.round((Date.now()-S.t0)/1e3),eta=p>3?Math.round(el*(100-p)/p):0,ids=S.ids||[];
 return`<div class="bar"><div class="ttl">Processing Clips...</div><div class="sp"></div><button class="btn" data-a="go" data-v="home">Minimize</button></div>
-<div class="card"><div class="row"><b style="color:var(--pu);font-size:22px">${p}% Done</b><div class="sp"></div><span style="color:var(--mu)">${100-p}% Left</span></div><div class="prog"><i style="width:${p}%"></i></div><div class="row"><span class="stat"><b>${String(Math.floor(p*.9/60)).padStart(2,"0")}:${String(Math.floor(p*.9)%60).padStart(2,"0")}</b>Elapsed</span><span class="stat"><b>~${eta}s</b>Left</span><span class="stat"><b>2.4x</b>Speed</span></div></div>
-<div class="card">${st.map((s,i)=>{const d=p>=th[i],c=!d&&p>=(th[i-1]||0);return`<div class="row" style="padding:7px 0">${d?"✅":c?"🔄":"⏳"}<div style="flex:1"><b>${s}</b><small style="color:var(--mu)">${d?"Completed (100%)":c?"In Progress":"Waiting in queue"}</small></div></div>`}).join("")}</div>
-<div class="card">${CL.filter((c,i)=>S.st[i]==1).map((c,i,a)=>{const q=Math.max(0,Math.min(100,Math.round((p-i*12)*1.2)));return`<div class="row" style="padding:5px 0"><b style="flex:1">Clip ${i+1}</b><small style="color:var(--mu)">${q>=100?"Done ✓":q>0?"Rendering "+q+"%":"Queued (0%)"}</small></div>`}).join("")}</div>
+<div class="card"><div class="row"><b style="color:var(--pu);font-size:22px">${p}% Done</b><div class="sp"></div><span style="color:var(--mu)">${100-p}% Left</span></div><div class="prog"><i style="width:${p}%"></i></div><div class="row"><span class="stat"><b>${String(Math.floor(el/60)).padStart(2,"0")}:${String(el%60).padStart(2,"0")}</b>Elapsed</span><span class="stat"><b>${p>3?"~"+eta+"s":"…"}</b>Left</span><span class="stat"><b>${ids.length}</b>Clips</span></div></div>
+<div class="card">${ids.map((ci,i)=>{const q=S.cp[i]||0;return`<div class="row" style="padding:5px 0"><b style="flex:1">Clip ${i+1}</b><small style="color:var(--mu)">${q>=100?"Done ✓":q>0?"Rendering "+q+"%":"Queued (0%)"}</small></div>`}).join("")}</div>
 <button class="out" data-a="cancel">Cancel Rendering</button><p style="text-align:center;color:var(--mu)">Running 100% on-device</p>`}
-function lib(d){const n=S.st.filter(x=>x==1).length||5;
-return d?`<div class="bar"><button class="back" data-a="go" data-v="lib">←</button><div><div class="ttl">🔴 Ranked Shorts Live Stream</div><small style="color:var(--mu)">${n} clip(s) from this video</small></div></div>
-${Array.from({length:n},(_, i)=>`<div class="card"><div class="row">${S.out&&S.out[i]?`<video controls playsinline src="${S.out[i].url}" style="width:96px;border-radius:10px;background:#000"></video>`:`<div class="frame" style="width:60px;margin:0"><div>▶</div></div>`}<div style="flex:1"><b>Clip ${i+1}</b> <span class="pill">9:16 Shorts</span><small style="color:var(--mu)">Duration: ${S.len} • ${CL[i%4][1].split(" – ")[0]}</small></div></div><div class="row" style="margin-top:10px"><button class="btn" data-a="go" data-v="edit">✎ Edit</button><button class="btn" data-a="sv" data-i="${i}">⬇ Save</button><button class="btn" data-a="toast" data-v="Share sheet opened">↗</button><button class="btn r" data-a="toast" data-v="Clip deleted">🗑</button></div>
-<div class="row" style="margin-top:8px"><span class="nw" style="margin:0">NEW</span><button class="btn" data-a="toast" data-v="Posting to Reels, Shorts and TikTok">Post to Reels / Shorts</button></div></div>`).join("")}`
-:`<div class="bar"><button class="back" data-a="go" data-v="home">←</button><div><div class="ttl">My Viral Videos</div><small style="color:var(--mu)">1 video(s) • ${n} total clip(s)</small></div></div><div class="card" data-a="go" data-v="det" style="cursor:pointer"><div class="row"><div class="frame" style="width:70px;margin:0;aspect-ratio:16/9"><div>▶</div></div><div style="flex:1"><b>🔴 Ranked Shorts Live Stream</b><small style="color:var(--mu)">Streamer • Today</small><span class="pill" style="background:var(--pt);color:var(--pu)">${n} Clip(s) Available</span></div>›</div></div>`}
-function mod(){return`<div class="bar"><button class="back" data-a="go" data-v="home">←</button><div class="ttl">AI Models &amp; Tools</div></div><div class="seg">${["Viral LLM (AI)","Speech Captions"].map((x,i)=>`<button class="${S.mt==i?"on":""}" data-a="s" data-k="mt" data-v="${i}">${x}</button>`).join("")}</div>
-${MOD[S.mt].map((m,i)=>`<div class="card" style="border-color:${S.mod[S.mt][i]?"var(--gn)":i==1&&!S.mt?"var(--pu)":"var(--bd)"}"><div class="row"><div style="flex:1"><b>${m[0]}</b><small style="color:var(--mu)">${m[1]}</small></div>${S.mod[S.mt][i]?'<span class="pill">Active in App</span>':`<button class="btn" data-a="dl" data-i="${i}">Download (${m[1]})</button>`}</div></div>`).join("")}
-<div class="card" style="background:var(--gt)">🛡 <b>100% On-Device Processing.</b> No audio, video, or data is ever sent to external cloud servers.</div><button class="out" style="color:var(--tx);border-color:var(--bd)" data-a="go" data-v="home">Done / Return to Home</button>`}
-function ap(){const o=$("#otx");if(!o)return;o.textContent=S.etxt||"Type your subtitle";o.style.top=S.ey+"%";o.style.fontSize=S.esz+"px";o.style.color=S.ecol;$("#pv").style.filter="brightness("+(1+S.br/100)+") contrast("+(1+S.ct/100)+")";$("#pi").style.transform="scale("+S.zm/100+")"}
-function edit(){const t=S.etab,rg=(k,l,a,b)=>`<div class="row" style="margin:10px 0"><small style="width:80px;color:var(--mu)">${l}</small><input type="range" min="${a}" max="${b}" value="${S[k]}" data-a="rg" data-k="${k}" style="flex:1"></div>`;
-return`<div class="bar"><button class="ib" data-a="go" data-v="det" aria-label="Close">✕</button><div class="sp"></div><span class="ch on">1080p</span><button class="btn gn" data-a="save">✓ Save</button></div>
-<div id="pv" class="frame" style="max-width:250px;margin:0 auto 12px"><div id="pi" style="position:absolute;inset:0;display:flex;flex-direction:column"><div style="background:radial-gradient(circle at 35% 60%,#8a846f,#15130f)">Gameplay</div><i class="seam"></i><div style="background:linear-gradient(135deg,#8a1f5a,#1d2a66)">Streamer</div></div><b id="otx" style="position:absolute;top:50%;padding:0 8px;font-weight:900">${S.etxt}</b></div>
+function lib(d){const n=S.out.length;
+return d?`<div class="bar"><button class="back" data-a="go" data-v="lib">←</button><div><div class="ttl">🎞 ${esc(S.title||"Your clips")}</div><small style="color:var(--mu)">${n} clip(s) from this video</small></div></div>
+${n?"":'<div class="card">No clips yet.</div>'}
+${S.out.map((o,i)=>`<div class="card"><div class="row"><video controls playsinline src="${o.url}" style="width:96px;border-radius:10px;background:#000"></video><div style="flex:1"><b>Clip ${i+1}</b> <span class="pill">${o.c.fmtLabel}</span><small style="color:var(--mu)">${esc(o.hook||"No hook")} • ${fmt(o.c.s)}</small></div></div><div class="row" style="margin-top:10px"><button class="btn" data-a="ed" data-i="${i}">✎ Edit</button><button class="btn" data-a="sv" data-i="${i}">${o.uri?"✓ Saved":"⬇ Save"}</button><button class="btn" data-a="sh" data-i="${i}">↗ Share</button><button class="btn r" data-a="dx" data-i="${i}">${S.dcf==i?"Tap to confirm":"🗑"}</button></div>
+<div class="row" style="margin-top:8px"><span class="nw" style="margin:0">NEW</span><button class="btn" data-a="sh" data-i="${i}">Share to Reels / Shorts</button></div></div>`).join("")}`
+:`<div class="bar"><button class="back" data-a="go" data-v="home">←</button><div><div class="ttl">My Viral Videos</div><small style="color:var(--mu)">${n?"1 video(s) • "+n+" total clip(s)":"Clips you make appear here"}</small></div></div>${n?`<div class="card" data-a="go" data-v="det" style="cursor:pointer"><div class="row"><div class="frame" style="width:70px;margin:0;aspect-ratio:16/9"><div>▶</div></div><div style="flex:1"><b>🎞 ${esc(S.title||"Your clips")}</b><small style="color:var(--mu)">This session</small><span class="pill" style="background:var(--pt);color:var(--pu)">${n} Clip(s) Available</span></div>›</div></div>`:'<div class="card">No clips yet. Make one from the home screen.</div>'}`}
+function mrow(m,k){const d=S.dlp[m.id],a=S.M.active[k]==m.id,pc=d&&d.t>0?Math.min(100,Math.round(d.d/d.t*100)):0;let right;
+if(d||m.busy)right=`<button class="btn r" data-a="mc" data-id="${m.id}">Cancel</button>`;
+else if(m.installed)right=(a?'<span class="pill">Active in App</span>':`<button class="btn gn" data-a="mu" data-id="${m.id}">Use</button>`)+`<button class="btn r" data-a="md" data-id="${m.id}" aria-label="Delete">🗑</button>`;
+else right=`<button class="btn" data-a="mg" data-id="${m.id}">Download (~${mb(m.approx)})</button>`;
+return`<div class="card" style="border-color:${a&&m.installed?"var(--gn)":"var(--bd)"}"><div class="rowb"><div style="flex:1"><b>${esc(m.name)}</b><small style="color:var(--mu)">${m.installed?"Installed • "+mb(m.size):"~"+mb(m.approx)}</small></div>${right}</div>${d?`<div class="prog"><i style="width:${pc}%"></i></div><small style="color:var(--mu)">${mb(d.d)} / ${d.t>0?mb(d.t):"?"} (${pc}%)</small>`:""}${S.err[m.id]?`<span class="err">${esc(S.err[m.id])}</span>`:""}</div>`}
+function mod(){const k=MT[S.mt];
+return`<div class="bar"><button class="back" data-a="go" data-v="home">←</button><div class="ttl">AI Models &amp; Tools</div></div><div class="seg">${["Viral LLM (AI)","Speech Captions"].map((x,i)=>`<button class="${S.mt==i?"on":""}" data-a="s" data-k="mt" data-v="${i}">${x}</button>`).join("")}</div>
+${!B?'<div class="warn">Model downloads run inside the ClipMe Android app.</div>':!S.M?'<div class="warn">Could not read model status. Reopen the app.</div>':(k=="llm"&&!S.M.engine?'<div class="warn">⚠ This build has no on-device LLM engine, so AI picks fall back to audio highlights. Rebuild with the native engine (see README).</div>':"")+S.M[k].map(m=>mrow(m,k)).join("")}
+<div class="card" style="background:var(--gt)">🛡 <b>100% On-Device Processing.</b> Models download once. After that no audio, video, or data is sent to any server.</div><button class="out" style="color:var(--tx);border-color:var(--bd)" data-a="go" data-v="home">Done / Return to Home</button>`}
+function ap(){const o=$("#otx");if(!o)return;o.textContent=S.eh||"SAMPLE CAPTION";o.style.top=S.ey+"%";o.style.fontSize=S.esz+"px";o.style.color=S.ecol;const p=$("#pi");if(p){p.style.filter="brightness("+(1+S.br/100)+") contrast("+(1+S.ct/100)+")";p.style.transform="scale("+S.zm/100+")"}}
+function edit(){const o=S.out[S.ei];if(!o){S.scr="det";return det()}const t=S.etab,rg=(k,l,a,b)=>`<div class="row" style="margin:10px 0"><small style="width:80px;color:var(--mu)">${l}</small><input type="range" min="${a}" max="${b}" value="${S[k]}" data-a="rg" data-k="${k}" style="flex:1"></div>`;
+return`<div class="bar"><button class="ib" data-a="go" data-v="det" aria-label="Close">✕</button><div class="sp"></div><button class="btn gn" data-a="save">✓ Save &amp; re-render</button></div>
+<div id="pv" class="frame" style="max-width:250px;margin:0 auto 12px;background:#000"><video id="pi" src="${o.url}" muted playsinline loop autoplay style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video><b id="otx" style="position:absolute;top:50%;padding:0 8px;font-weight:900">${esc(S.eh||"SAMPLE CAPTION")}</b></div>
 <button class="cta" style="position:static;margin:0 0 12px" data-a="auto">✨ Auto Adjust video <span class="nw">NEW</span></button>
-<div class="card" style="padding:8px"><div class="row"><span class="stat">00:00</span><div style="flex:3;height:36px;border-radius:8px;background:linear-gradient(90deg,#3a362c,#7a2a55,#3a362c,#7a2a55)"></div></div><div style="margin:6px 0 0 58px;background:var(--am);color:#111;border-radius:8px;padding:6px 10px;font-weight:700">${S.etxt}</div></div>
 <div class="chips" style="margin-bottom:8px">${["Crop","Style","Adjust","Text"].map(x=>`<button class="ch ${t==x?"on":""}" data-a="et" data-v="${x}">${x}</button>`).join("")}</div>
-<div class="card">${t=="Text"?`<b>Subtitle text</b><input type="text" style="margin-top:8px" placeholder="Type your subtitle" value="${S.etxt}" data-a="in" data-k="etxt">${rg("ey","Position",8,92)}${rg("esz","Size",14,38)}<button class="btn" data-a="gen">Auto-write from speech</button>`:t=="Style"?`<b>Subtitle colour</b><div class="chips" style="margin-top:8px">${[["White","#FFFFFF"],["Viral Yellow","#FACC15"],["Neon Cyan","#22D3EE"],["Lime","#A3E635"],["Amber","#FB923C"]].map(c=>`<button class="ch ${S.ecol==c[1]?"on":""}" data-a="ec" data-v="${c[1]}">${c[0]}</button>`).join("")}</div>`:t=="Adjust"?rg("br","Brightness",-30,30)+rg("ct","Contrast",-30,30):`<b>Framing</b><small style="display:block;color:var(--mu)">Zoom in on the streamer or game. Auto Adjust does this for you.</small>${rg("zm","Zoom",100,160)}`}</div>`}
-function R(){$("#app").innerHTML=({home,rev,prog,lib:()=>lib(0),det:()=>lib(1),mod,edit})[S.scr]()+(S.scr=="lib"||S.scr=="det"?'<button class="fab" data-a="go" data-v="home">+ New Clip</button>':"")+(S.help?`<div class="modal" data-a="help"><div class="card"><h3 style="margin-top:0">Layout help</h3><p><b>Auto (recommended):</b> finds gameplay and facecam and splits them 50/50.</p><p><b>Set it myself:</b> drag boxes over the game and the streamer.</p><p><b>Full frame:</b> crops around the person, ideal for Just Chatting.</p><p><b>When Auto gets it wrong:</b> switch to manual boxes. They apply to every moment of that link.</p><button class="cta" data-a="help">Got it</button></div></div>`:"")}
-function upd(){const c=$("#cta");if(c){c.className="cta "+(S.url.length>6||S.file?"":"off")}}
+<div class="card">${t=="Text"?`<b>Hook title (top of the clip)</b><input type="text" style="margin-top:8px" placeholder="Leave empty for no hook" value="${esc(S.eh)}" data-a="in" data-k="eh">${rg("ey","Caption pos.",8,92)}${rg("esz","Caption size",14,38)}<button class="btn" data-a="gen">✨ Write hook with AI</button>`:t=="Style"?`<b>Caption colour</b><div class="chips" style="margin-top:8px">${[["White","#FFFFFF"],["Viral Yellow","#FACC15"],["Neon Cyan","#22D3EE"],["Lime","#A3E635"],["Amber","#FB923C"]].map(c=>`<button class="ch ${S.ecol==c[1]?"on":""}" data-a="ec" data-v="${c[1]}">${c[0]}</button>`).join("")}</div>`:t=="Adjust"?rg("br","Brightness",-30,30)+rg("ct","Contrast",-30,30):`<b>Framing</b><small style="display:block;color:var(--mu)">Zoom in on the picture. Auto Adjust does this for you.</small>${rg("zm","Zoom",100,160)}`}</div>`}
+const det=()=>lib(1);
+function R(){const f={home,rev,prog,lib:()=>lib(0),det,mod,edit}[S.scr];$("#app").innerHTML=f()+(S.scr=="lib"||S.scr=="det"?'<button class="fab" data-a="go" data-v="home">+ New Clip</button>':"")+(S.help?`<div class="modal" data-a="help"><div class="card"><h3 style="margin-top:0">Layout help</h3><p><b>Auto (recommended):</b> shows the video on top and zooms on the detected face at the bottom.</p><p><b>Set it myself:</b> tell it which corner the facecam is in. It applies to every moment of that link.</p><p><b>Full frame:</b> fills the whole screen, ideal for Just Chatting.</p><button class="cta" data-a="help">Got it</button></div></div>`:"");if(S.scr=="edit")ap()}
+function upd(){const c=$("#cta");if(c&&!S.busy)c.className=c.className.replace(/\boff\b/,"")+(S.url.length>6||S.file?"":" off")}
+function busy(m){S.busy=m;const c=$("#cta");if(S.scr=="home"&&c){if(m){c.textContent=m;c.classList.add("busy")}else R()}else if(!m&&S.scr=="home")R()}
+
+/* ---------- events ---------- */
 document.addEventListener("input",e=>{const d=e.target.dataset;if(d.a=="in"){S[d.k]=e.target.value;upd();ap()}if(d.a=="rg"){S[d.k]=+e.target.value;ap()}});
 document.addEventListener("click",async e=>{const el=e.target.closest("[data-a]");if(!el||el.tagName=="INPUT"||el.tagName=="TEXTAREA")return;const d=el.dataset,a=d.a,v=d.v;
-if(a=="t")S[d.k]=S[d.k]?0:1;else if(a=="s"){S[d.k]=isNaN(v)||d.k=="len"?v:+v;if(d.k=="len")S.len=v}else if(a=="go"){S.scr=v;scrollTo(0,0)}
-else if(a=="th")S.th=Math.max(1,Math.min(20,S.th+ +v));else if(a=="help")S.help=S.help?0:1;else if(a=="swap"){S.swap^=1}
-else if(a=="paste"){try{S.url=window.AndroidBridge?AndroidBridge.paste():await navigator.clipboard.readText();toast("ClipMe pasted from your clipboard")}catch(x){toast("Long-press the box and tap Paste")}}
-else if(a=="scan"){if(window.AndroidBridge&&S.url.length>6&&!(S.file&&S.src==S.url))await getLink();if(!S.file)return toast("Paste a video link first");toast("Analysing audio on your device...");await analyse();if(window.AndroidBridge&&S.cap&&CL.length){toast("Getting caption model...");if(!await model())toast("Captions need internet once to get the speech model")}if(!CL.length)return toast("No clips found. Try a longer video.");if(S.rev){S.scr="rev"}else{S.st=CL.map(()=>1);a2()}}
-else if(a=="st"){S.st[+d.i]=+v}else if(a=="render"){if(!S.st.includes(1))return toast("Approve at least one clip");a2()}
-else if(a=="cancel"){S.cancel=1;S.scr="home"}else if(a=="dl"){S.mod[S.mt][+d.i]=1;toast("Downloaded "+MOD[S.mt][+d.i][0])}
-else if(a=="sv"){await savec(+d.i);return}else if(a=="train"){try{localStorage.setItem("dc_prm",S.prm)}catch(x){}const r=rules();toast("Trained: skip first "+r.skip+"s, prefer "+(r.calm?"calm":"loud")+" moments")}else if(a=="auto"){S.zm=118;S.br=8;S.ct=12;toast("Auto Adjust: face centred, light balanced, shake steadied")}else if(a=="gen"){S.etxt="He did not expect this";toast("Subtitles generated from speech")}else if(a=="ec"){S.ecol=v}else if(a=="et"){S.etab=v}else if(a=="save"){S.scr="det";toast("Clip saved with subtitles")}else if(a=="toast")return toast(v);else if(a=="pro")return toast("ClipMe Pro: no ads, 4K export, priority rendering");
-R();ap()});
-async function a2(){S.pct=0;S.scr="prog";S.out=[];S.cancel=0;const ids=CL.map((c,i)=>i).filter(i=>S.st[i]==1);R();for(let k=0;k<ids.length;k++){if(S.cancel)return;const o=await rec(CL[ids[k]],p=>{if(S.scr=="prog"){S.pct=Math.min(99,Math.round((k+p)/ids.length*100));R()}});if(S.cancel)return;S.out.push(o)}S.pct=100;S.scr="det";toast("Clips ready. Play one, then use the video menu to download.");R()}
-async function savec(i){const o=S.out&&S.out[i];if(!o)return toast("Render the clip first");if(!window.AndroidBridge)return toast("Play the clip, then use its menu to download");const bl=await(await fetch(o.url)).blob(),fr=new FileReader();fr.onload=()=>AndroidBridge.save(fr.result.split(",")[1],"clipme-"+(i+1)+".webm");fr.readAsDataURL(bl)}
-async function faceAt(v){if(!window.AndroidBridge)return null;try{const c=document.createElement("canvas");c.width=320;c.height=Math.round(320*v.videoHeight/v.videoWidth);c.getContext("2d").drawImage(v,0,0,c.width,c.height);return JSON.parse(AndroidBridge.face(c.toDataURL("image/jpeg",.7).split(",")[1]))}catch(e){return null}}
-async function capsFor(c){if(!window.AndroidBridge||!S.abuf||!S.cap)return[];try{const oc=new OfflineAudioContext(1,Math.ceil(c[6]*16000),16000),s=oc.createBufferSource();s.buffer=S.abuf;s.connect(oc.destination);s.start(0,c[5],c[6]);const f=(await oc.startRendering()).getChannelData(0),u=new Int16Array(f.length);for(let i=0;i<f.length;i++)u[i]=Math.max(-1,Math.min(1,f[i]))*32767;AndroidBridge.capStart();const by=new Uint8Array(u.buffer);for(let o=0;o<by.length;o+=96000){let t="";const sl=by.subarray(o,o+96000);for(let k=0;k<sl.length;k+=8192)t+=String.fromCharCode.apply(null,sl.subarray(k,k+8192));AndroidBridge.capChunk(btoa(t))}return JSON.parse(AndroidBridge.capEnd())}catch(e){return[]}}
-function model(){return new Promise(r=>{window.onModel=r;AndroidBridge.prep(S.lang=="English"?"en":"hi")})}
-function getLink(){return new Promise(res=>{window.onDlp=t=>toast(t);window.onDl=p=>{if(!p){toast("Couldn’t download this link. Check it is public.");return res()}S.file=true;S.vurl="/media/"+p+"?t="+Date.now();S.aurl="/media/video.wav?t="+Date.now();S.src=S.url;res()};toast("Downloading video...");AndroidBridge.fetch(S.url,S.tab=="l"?1:0)})}
+if(a=="t")S[d.k]=S[d.k]?0:1;
+else if(a=="s"){if(d.k=="ht"&&S.ht==v)S.ht="";else S[d.k]=(isNaN(v)||d.k=="len"||d.k=="corner"||d.k=="lang"||d.k=="ht")?v:+v}
+else if(a=="cs"){S.cs=+v;S.ecol=PAL[+v][2]}
+else if(a=="go"){S.scr=v;if(d.mt!==undefined)S.mt=+d.mt;if(v=="mod")loadM();scrollTo(0,0)}
+else if(a=="help")S.help=S.help?0:1;
+else if(a=="swap")S.swap^=1;
+else if(a=="paste"){try{S.url=B?B.paste():await navigator.clipboard.readText();toast("Pasted from your clipboard")}catch(x){toast("Long-press the box and tap Paste")}}
+else if(a=="scan"){scan();return}
+else if(a=="st")S.st[+d.i]=+v;
+else if(a=="render"){if(!S.st.includes(1))return toast("Approve at least one clip");a2()}
+else if(a=="cancel"){S.cancel=1;S.scr="home"}
+else if(a=="mg"){if(!B)return;S.dlp[d.id]={d:0,t:0};delete S.err[d.id];B.mdlGet(d.id);toast("Downloading… keep the app open")}
+else if(a=="mc"){B&&B.mdlCancel(d.id);toast("Cancelling…");return}
+else if(a=="mu"){B.mdlUse(d.id);loadM();toast("Now using this model")}
+else if(a=="md"){B.mdlDelete(d.id);loadM();toast("Model deleted")}
+else if(a=="sv"){await savec(+d.i);R();return}
+else if(a=="sh"){await sharec(+d.i);return}
+else if(a=="dx"){delc(+d.i)}
+else if(a=="ed"){S.ei=+d.i;const o=S.out[S.ei];S.eh=o.hook||"";S.scr="edit"}
+else if(a=="train"){try{localStorage.setItem("dc_prm",S.prm)}catch(x){}const r=rules();toast("Saved: skip first "+r.skip+"s, prefer "+(r.calm?"calm":"loud")+" moments"+(llmReady()?" • AI will read your note":""))}
+else if(a=="auto"){S.zm=118;S.br=8;S.ct=12;toast("Auto Adjust: zoom +18%, brightness +8, contrast +12")}
+else if(a=="gen"){hookFor();return}
+else if(a=="ec"){S.ecol=v}
+else if(a=="et"){S.etab=v}
+else if(a=="save"){redo();return}
+R()});
+document.addEventListener("change",e=>{if(e.target.id=="vf"){const f=e.target.files[0];if(f){S.file=f;S.src=key();S.vurl=URL.createObjectURL(f);S.aurl=S.vurl;S.info=null;S.title=f.name;toast("Loaded "+f.name);R()}}});
+
+/* ---------- video link / file ---------- */
+function getLink(){return new Promise(res=>{window.onDlp=t=>{toast(t);busy(t)};window.onDl=(p,err)=>{if(!p){toast("Couldn’t download: "+(err||"check the link is public"));return res(false)}
+S.file=true;S.vurl="/media/"+p+"?t="+Date.now();S.aurl="/media/video.wav?t="+Date.now();S.src=key();S.info=null;S.title="";try{S.info=JSON.parse(B.info());S.title=S.info&&S.info.title||""}catch(e){}res(true)};busy("Downloading video…");B.fetch(S.url,S.tab=="l"?1:0)})}
+function model(){return new Promise(r=>{window.onModel=r;B.prep(S.lang=="English"?"en":"hi")})}
 function rules(){const p=(S.prm||"").toLowerCase(),m=p.match(/skip (?:the )?first (\d+)/);return{skip:m?+m[1]:0,calm:/calm|quiet|story|talk/.test(p)&&!/loud/.test(p)}}
-function brain(){return`<div class="card">${head("🧠","Train your offline AI","Tell it what a good clip is",'<span class="nw">NEW</span>')}<div class="body"><textarea data-a="in" data-k="prm" rows="3" style="width:100%;border:1px solid var(--bd);background:var(--bg);color:var(--tx);border-radius:12px;padding:12px;font:inherit">${S.prm}</textarea><div class="row" style="margin-top:8px"><button class="btn" data-a="train">Save &amp; train</button><small style="color:var(--mu)">Understands: skip first 30, calm, quiet, loud</small></div></div></div>`}
-async function analyse(){const ac=new(window.AudioContext||window.webkitAudioContext)({sampleRate:16000});let bf;try{bf=await ac.decodeAudioData(await(await fetch(S.aurl)).arrayBuffer())}catch(x){CL.length=0;return toast("Couldn’t read audio from this file")}
-S.abuf=bf;const r=rules(),d=parseInt(S.len)||20,ch=bf.getChannelData(0),sr=bf.sampleRate,N=Math.floor(bf.duration),e=[];
+const lenSec=()=>S.tab=="l"?({"10s (Short)":10,"20s (Reel)":20,"30s (Viral)":30,"60s (Full)":60}[S.dur]||25):(parseInt(S.len)||20);
+
+/* ---------- speech -> words ---------- */
+async function wordsFor(s,l){if(!B||!S.abuf)return[];try{const oc=new OfflineAudioContext(1,Math.ceil(l*16000),16000),src=oc.createBufferSource();src.buffer=S.abuf;src.connect(oc.destination);src.start(0,s,l);const f=(await oc.startRendering()).getChannelData(0),u=new Int16Array(f.length);for(let i=0;i<f.length;i++)u[i]=Math.max(-1,Math.min(1,f[i]))*32767;B.capStart();const by=new Uint8Array(u.buffer);for(let o=0;o<by.length;o+=96000){let t="";const sl=by.subarray(o,o+96000);for(let k=0;k<sl.length;k+=8192)t+=String.fromCharCode.apply(null,sl.subarray(k,k+8192));B.capChunk(btoa(t))}return JSON.parse(B.capEnd())}catch(e){return[]}}
+async function faceAt(v){if(!B)return null;try{const c=document.createElement("canvas");c.width=320;c.height=Math.round(320*v.videoHeight/v.videoWidth);c.getContext("2d").drawImage(v,0,0,c.width,c.height);return JSON.parse(B.face(c.toDataURL("image/jpeg",.7).split(",")[1]))}catch(e){return null}}
+
+/* ---------- on-device LLM ---------- */
+function llmRun(sys,user,max){return new Promise(res=>{const tok="q"+Date.now();window.onLlm=(t,ok,txt)=>{if(t==tok)res({ok,txt})};B.llmRun(S.M.active.llm,sys,user,max,tok)})}
+function cleanHook(t){return String(t||"").replace(/[^A-Za-z0-9 !?'’\-]/g," ").trim().split(/\s+/).filter(Boolean).slice(0,6).join(" ").toUpperCase()}
+function parseAI(txt,K,n){const out=[],seen=new Set();for(const ln of String(txt).split("\n")){const p=ln.split("|").map(x=>x.trim());if(p.length<3)continue;const id=parseInt(p[0].replace(/[^0-9]/g,""));if(!(id>=1&&id<=K)||seen.has(id))continue;const sc=parseInt(p[1].replace(/[^0-9]/g,""));seen.add(id);out.push({k:id-1,score:isNaN(sc)?80:Math.max(40,Math.min(99,sc)),hook:cleanHook(p[2]),why:(p[3]||"").slice(0,90)})}return out.slice(0,n)}
+async function aiRank(cands,n){const lines=cands.map((c,i)=>`[${i+1}] at ${fmt(c.s)} | loudness ${Math.round(c.a*100)} | said: "${(c.text||"(no speech)").slice(0,240)}"`).join("\n");
+const sys="You are an expert short-form video editor. You answer only in the exact line format requested.";
+const user=`Here are ${cands.length} candidate moment${cands.length>1?"s":""} from one video.\n${lines}\n\n${S.prm?"Creator's note: "+S.prm.slice(0,200)+"\n\n":""}Choose the ${n} moments most likely to go viral (funny, shocking, emotional, a clear punchline or payoff). Write ${n} line${n>1?"s":""}, one per chosen moment, exactly like this:\nID | SCORE | HOOK | REASON\nID is the moment number, SCORE is 0-100, HOOK is a catchy 3 to 6 word title in ALL CAPS that fits what was said, REASON is under 10 words.\nExample: 2 | 91 | WAIT FOR THE ENDING | Shocking reveal with a loud reaction\nWrite only the lines.`;
+const r=await llmRun(sys,user,70+n*45);if(!r.ok){toast("AI problem: "+r.txt);return null}
+const p=parseAI(r.txt,cands.length,n);if(!p.length){toast("AI answer wasn’t readable, using audio highlights");return null}return p}
+async function hookFor(){const o=S.out[S.ei];if(!llmReady())return toast("Download an AI model first (🧠 button)");const txt=(o.c.text||"").trim();if(!txt)return toast("No speech found in this clip to write from");toast("AI is writing a hook…");
+const r=await llmRun("You write viral short-video hook titles. Reply with the title only.",`What was said: "${txt.slice(0,500)}"\nWrite ONE catchy hook title of 3 to 6 words in ALL CAPS. Reply with the title only.`,24);
+if(!r.ok)return toast("AI problem: "+r.txt);const h=cleanHook(r.txt.split("\n")[0]);if(!h)return toast("AI gave no title, try again");S.eh=h;R()}
+
+/* ---------- finding the moments ---------- */
+async function analyse(){busy("Reading audio…");const ac=new(window.AudioContext||window.webkitAudioContext)({sampleRate:16000});let bf;
+try{bf=await ac.decodeAudioData(await(await fetch(S.aurl)).arrayBuffer())}catch(x){CL=[];toast("Couldn’t read audio from this file");return false}
+try{ac.close()}catch(e){}
+S.abuf=bf;const r=rules(),w0=lenSec(),ch=bf.getChannelData(0),sr=bf.sampleRate,N=Math.floor(bf.duration),w=Math.min(w0,N),e=[];
 for(let s=0;s<N;s++){let a=0;for(let i=0;i<sr;i+=50)a+=Math.abs(ch[s*sr+i]||0);e.push(a/(sr/50))}
-const mx=Math.max(...e,1e-6),sc=e.map(x=>x/mx),w=Math.min(d,N),sk=Math.min(r.skip,Math.max(0,N-w)),W=[];
-for(let s=sk;s+w<=N;s++){let m=0;for(let i=s;i<s+w;i++)m+=sc[i];m/=w;W.push([s,r.calm?1-m:m])}
-W.sort((a,b)=>b[1]-a[1]);const pk=[];for(const x of W){if(pk.length>=S.n)break;if(pk.every(p=>Math.abs(p[0]-x[0])>=w))pk.push(x)}
-pk.sort((a,b)=>a[0]-b[0]);CL.length=0;const t=s=>new Date(s*1e3).toISOString().substr(11,8);
-pk.forEach((p,i)=>CL.push([S.ht||("Moment "+(i+1)),t(p[0])+" – "+t(p[0]+w),r.calm?"😌 Calm moment":"🔥 Audio peak",Math.round(55+p[1]*44),r.calm?"Quiet, steady audio":"Loudest stretch of the video",p[0],w]));S.st=CL.map(()=>0)}
-function rec(c,cb){return new Promise(res=>{const v=document.createElement("video");v.src=S.vurl;v.playsInline=true;const cv=document.createElement("canvas");cv.width=540;cv.height=960;const x=cv.getContext("2d");let go=0;
-v.onloadedmetadata=()=>{v.currentTime=c[5]+.01};
-v.onseeked=async()=>{if(go)return;go=1;const F=await faceAt(v),K=await capsFor(c);const cs=cv.captureStream(30);try{v.captureStream().getAudioTracks().forEach(t=>cs.addTrack(t))}catch(e){}
-const mr=new MediaRecorder(cs),parts=[];mr.ondataavailable=e=>parts.push(e.data);mr.onstop=()=>res({url:URL.createObjectURL(new Blob(parts,{type:"video/webm"}))});
-const W=v.videoWidth,H=v.videoHeight,z=S.zm/100,cover=(sx,sy,sw,sh,dy,dh)=>{const k=Math.min(sw/540,sh/dh),cw=540*k,chh=dh*k;x.drawImage(v,sx+(sw-cw)/2,sy+(sh-chh)/2,cw,chh,0,dy,540,dh)};
-const fcrop=()=>{if(!F)return cover(W*.5-W/(2*1.6*z),H*.5-H/(2*1.6*z),W/(1.6*z),H/(1.6*z),480,480);let cw=Math.min(W,Math.max(F[2]*W*3.2,W*.2)),hh=cw/1.125;if(hh>H){hh=H;cw=hh*1.125}x.drawImage(v,Math.max(0,Math.min(W-cw,F[0]*W-cw/2)),Math.max(0,Math.min(H-hh,F[1]*H-hh*.45)),cw,hh,0,480,540,480)};const draw=()=>{if(S.cancel){mr.stop();v.pause();return}x.fillStyle="#000";x.fillRect(0,0,540,960);
-if(S.fmt=="v"&&S.lay!="Full frame"){cover(0,0,W,H,0,480);fcrop();x.fillStyle="#fff";x.fillRect(0,478,540,4)}else cover(0,0,W,H,0,960);
-x.textAlign="center";x.lineWidth=7;x.strokeStyle="#000";x.font="900 36px sans-serif";x.fillStyle=S.ecol;const ty=S.ey/100*960;const tt=v.currentTime-c[5],ix=K.findIndex(q=>tt>=q[1]&&tt<=q[2]+.15),gi=Math.floor(ix/3)*3,g=window.AndroidBridge?(ix<0?"":K.slice(gi,gi+3).map(q=>q[0]).join(" ").toUpperCase()):S.etxt;x.strokeText(g,270,ty);x.fillText(g,270,ty);
-if(S.hook&&S.ht){x.font="900 30px sans-serif";x.fillStyle="#FACC15";x.strokeText(S.ht,270,70);x.fillText(S.ht,270,70)}
-cb(Math.max(0,(v.currentTime-c[5])/c[6]));if(v.currentTime>=c[5]+c[6]||v.ended){mr.stop();v.pause();return}requestAnimationFrame(draw)};
-mr.start();v.play().catch(()=>{v.muted=true;v.play()});draw()}})}
-document.addEventListener("change",e=>{if(e.target.id=="vf"){const f=e.target.files[0];if(f){S.file=f;S.src=S.url;S.vurl=URL.createObjectURL(f);toast("Loaded "+f.name);R();ap()}}});
+let mx=1e-6;for(const x of e)if(x>mx)mx=x;const sc=e.map(x=>x/mx);
+let hm=null;if(S.info&&S.info.heatmap&&S.info.heatmap.length){hm=new Array(N).fill(0);let hx=1e-6;for(const h of S.info.heatmap){hx=Math.max(hx,h[2]);for(let s=Math.floor(h[0]);s<Math.min(N,Math.ceil(h[1]));s++)hm[s]=h[2]}hm=hm.map(x=>x/hx)}
+const pre=a=>{const p=[0];for(const x of a)p.push(p[p.length-1]+x);return p},pa=pre(sc),ph=hm?pre(hm):null;
+const sk=Math.min(r.skip,Math.max(0,N-w)),W=[];
+for(let s=sk;s+w<=N;s++){const a=(pa[s+w]-pa[s])/w,h=ph?(ph[s+w]-ph[s])/w:0,v=ph?.55*a+.45*h:a;W.push({s,v:r.calm?1-v:v,a,h})}
+W.sort((x,y)=>y.v-x.v);
+const useAI=!!(S.ai&&llmReady()),K=useAI?Math.min(9,Math.max(S.n*3,S.n+2)):S.n,cands=[];
+for(const x of W){if(cands.length>=K)break;if(cands.every(p=>Math.abs(p.s-x.s)>=w))cands.push(Object.assign({l:w,text:"",face:false},x))}
+cands.sort((x,y)=>x.s-y.s);
+if(S.tab=="l"&&S.fa&&B&&cands.length){busy("Checking faces…");await faceProbe(cands)}
+if(useAI&&cands.length){busy("Loading speech model…");let ok=false;try{ok=await model()}catch(e){}
+ if(ok){for(let i=0;i<cands.length;i++){busy("Listening to moment "+(i+1)+"/"+cands.length+"…");cands[i].text=(await wordsFor(cands[i].s,cands[i].l)).map(q=>q[0]).join(" ")}}else toast("Speech model unavailable, AI will use audio only");
+ busy("AI is choosing the best moments… (can take a minute)");S.ai_res=await aiRank(cands,Math.min(S.n,cands.length))}else S.ai_res=null;
+let order;const used=new Set();
+if(S.ai_res){order=S.ai_res.map(p=>{used.add(p.k);return Object.assign({},cands[p.k],{ai:p})});const rest=cands.map((c,k)=>k).filter(k=>!used.has(k)).sort((x,y)=>cands[y].v-cands[x].v);for(const k of rest){if(order.length>=S.n)break;order.push(cands[k])}}
+else order=cands.slice().sort((x,y)=>y.v-x.v).slice(0,S.n);
+order.sort((x,y)=>x.s-y.s);
+CL=order.map((c,i)=>{const heur=Math.round(55+Math.max(0,Math.min(1,c.v))*44);return{s:c.s,l:c.l,text:c.text||"",
+ tag:r.calm?"😌 Calm moment":c.face?"😱 Face on cam":c.h>.6?"🔥 Most replayed":"🔊 Audio peak",
+ score:c.ai?c.ai.score:heur,why:c.ai&&c.ai.why?c.ai.why:(r.calm?"Quiet, steady audio":c.h>.6?"Viewers replay this part the most":"Loudest stretch of the video"),
+ hook:(c.ai&&c.ai.hook)||FB[i%FB.length],fmtLabel:S.fmt=="v"?"9:16 Shorts":"16:9"}});
+S.st=CL.map(()=>0);return true}
+async function faceProbe(cands){const v=document.createElement("video");v.muted=true;v.playsInline=true;v.src=S.vurl;await new Promise(r=>{v.onloadedmetadata=r;v.onerror=r;setTimeout(r,6000)});if(!v.videoWidth)return;
+for(const c of cands){v.currentTime=c.s+c.l/2;await new Promise(r=>{v.onseeked=r;setTimeout(r,2500)});const F=await faceAt(v);c.face=!!F;if(F)c.v+=.12}}
+async function scan(){if(S.busy)return;
+if(B&&S.url.length>6&&!(S.file&&S.src==key())){if(!await getLink()){busy("");return}}
+if(!S.file){return toast("Paste a video link or choose a file first")}
+if(B&&S.ai&&!llmReady())toast(S.M&&!S.M.engine?"This build has no LLM engine, using audio highlights":"No AI model yet (🧠), using audio highlights");
+const ok=await analyse();if(!ok){busy("");return}
+if(B&&S.cap&&CL.length){busy("Getting caption model…");let m=false;try{m=await model()}catch(e){}if(!m)toast("Captions need internet once to get the speech model")}
+busy("");if(!CL.length)return toast("No clips found. Try a longer video.");if(S.tab=="n"&&CL.length<S.n)toast("Only "+CL.length+" clip"+(CL.length>1?"s":"")+" fit in this video. Try a longer video or shorter clips.");
+if(S.rev){S.scr="rev";R()}else{S.st=CL.map(()=>1);a2()}}
+
+/* ---------- rendering ---------- */
+const MIME=["video/mp4;codecs=avc1.42E01E,mp4a.40.2","video/mp4","video/webm;codecs=vp9,opus","video/webm;codecs=vp8,opus","video/webm"].find(t=>window.MediaRecorder&&MediaRecorder.isTypeSupported(t))||"";
+function beat(ctx,dest,secs){const g=ctx.createGain();g.gain.value=.17;g.connect(dest);const t0=ctx.currentTime+.05,step=60/104/2,noise=ctx.createBuffer(1,ctx.sampleRate*.06,ctx.sampleRate),nd=noise.getChannelData(0);for(let i=0;i<nd.length;i++)nd[i]=(Math.random()*2-1)*(1-i/nd.length);
+for(let k=0;k*step<secs+1;k++){const t=t0+k*step;if(k%4==0){const o=ctx.createOscillator(),e=ctx.createGain();o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(42,t+.14);e.gain.setValueAtTime(1,t);e.gain.exponentialRampToValueAtTime(.001,t+.2);o.connect(e);e.connect(g);o.start(t);o.stop(t+.22)}
+ if(k%2==1){const n=ctx.createBufferSource(),f=ctx.createBiquadFilter(),e=ctx.createGain();n.buffer=noise;f.type="highpass";f.frequency.value=6500;e.gain.value=.35;n.connect(f);f.connect(e);e.connect(g);n.start(t)}
+ if(k%8==0||k%8==3){const o=ctx.createOscillator(),e=ctx.createGain();o.type="triangle";o.frequency.value=k%16<8?55:65.4;e.gain.setValueAtTime(.7,t);e.gain.exponentialRampToValueAtTime(.001,t+.45);o.connect(e);e.connect(g);o.start(t);o.stop(t+.5)}}}
+function rec(c,cb,opt){opt=opt||{};return new Promise(res=>{const vurl=opt.vurl||S.vurl,v=document.createElement("video");v.src=vurl;v.playsInline=true;v.preload="auto";const vert=S.fmt=="v",CW=vert?540:960,CH=vert?960:540,cv=document.createElement("canvas");cv.width=CW;cv.height=CH;const x=cv.getContext("2d");let go=0,fin=0;
+const fail=()=>{if(!fin){fin=1;res(null)}};v.onerror=fail;
+v.onloadedmetadata=()=>{v.currentTime=c.s+.01};
+v.onseeked=async()=>{if(go)return;go=1;
+const F=opt.F!==undefined?opt.F:await faceAt(v),K=opt.words!==undefined?opt.words:(S.cap&&B?await wordsFor(c.s,c.l):[]);
+const cs=cv.captureStream(30);let ac2=null;
+try{if(S.music){ac2=new(window.AudioContext||window.webkitAudioContext)();const md=ac2.createMediaStreamDestination();ac2.createMediaElementSource(v).connect(md);beat(ac2,md,c.l);md.stream.getAudioTracks().forEach(t=>cs.addTrack(t))}else v.captureStream().getAudioTracks().forEach(t=>cs.addTrack(t))}catch(e){try{v.captureStream().getAudioTracks().forEach(t=>cs.addTrack(t))}catch(e2){}}
+let mr;try{mr=new MediaRecorder(cs,MIME?{mimeType:MIME,videoBitsPerSecond:4e6}:{})}catch(e){return fail()}
+const parts=[];mr.ondataavailable=e=>{if(e.data&&e.data.size)parts.push(e.data)};
+mr.onstop=()=>{try{ac2&&ac2.close()}catch(e){}if(fin)return;fin=1;const type=(mr.mimeType||MIME||"video/webm").split(";")[0];const blob=new Blob(parts,{type});res({url:URL.createObjectURL(blob),type,c,vurl,words:K,F,hook:opt.hook!==undefined?opt.hook:(S.hook?(S.ht||c.hook):"")})};
+const W=v.videoWidth,H=v.videoHeight,z=(opt.zm||S.zm)/100,man=vert&&S.lay=="Set it myself",flip=man&&S.swap;
+const cover=(sx,sy,sw,sh,dy,dh,zz)=>{zz=zz||1;const w0=sw,h0=sh;sw/=zz;sh/=zz;sx+=(w0-sw)/2;sy+=(h0-sh)/2;const k=Math.min(sw/CW,sh/dh),cw=CW*k,chh=dh*k;x.drawImage(v,sx+(sw-cw)/2,sy+(sh-chh)/2,cw,chh,0,dy,CW,dh)};
+const fcrop=dy=>{if(man){const q={tl:[0,0],tr:[.65,0],bl:[0,.65],br:[.65,.65]}[S.corner]||[.65,0];return cover(W*q[0],H*q[1],W*.35,H*.35,dy,480)}
+ if(!F)return cover(W*.5-W/3.2,H*.5-H/3.2,W/1.6,H/1.6,dy,480);let cw=Math.min(W,Math.max(F[2]*W*3.2,W*.2)),hh=cw/1.125;if(hh>H){hh=H;cw=hh*1.125}x.drawImage(v,Math.max(0,Math.min(W-cw,F[0]*W-cw/2)),Math.max(0,Math.min(H-hh,F[1]*H-hh*.45)),cw,hh,0,dy,540,480)};
+const dr=()=>{if(S.cancel){mr.state!="inactive"&&mr.stop();v.pause();return}
+x.filter="none";x.fillStyle="#000";x.fillRect(0,0,CW,CH);x.filter="brightness("+(1+(opt.br!==undefined?opt.br:S.br)/100)+") contrast("+(1+(opt.ct!==undefined?opt.ct:S.ct)/100)+")";
+if(vert&&S.lay!="Full frame"){const gy=flip?480:0,fy=flip?0:480;cover(0,0,W,H,gy,480,z);fcrop(fy);x.filter="none";x.fillStyle="#fff";x.fillRect(0,478,540,4)}else cover(0,0,W,H,0,CH,z);
+x.filter="none";x.textAlign="center";x.lineWidth=7;x.lineJoin="round";x.strokeStyle="#000";const fs=Math.round((opt.esz||S.esz)*1.64);x.font="900 "+fs+"px sans-serif";x.fillStyle=opt.ecol||S.ecol;const ty=(opt.ey||S.ey)/100*CH,tt=v.currentTime-c.s,ix=K.findIndex(q=>tt>=q[1]&&tt<=q[2]+.15),gi=Math.floor(ix/3)*3,g=ix<0?"":K.slice(gi,gi+3).map(q=>q[0]).join(" ").toUpperCase();if(g){x.strokeText(g,CW/2,ty);x.fillText(g,CW/2,ty)}
+const hk=opt.hook!==undefined?opt.hook:(S.hook?(S.ht||c.hook):"");if(hk){x.font="900 30px sans-serif";x.fillStyle="#FACC15";x.strokeText(hk,CW/2,70);x.fillText(hk,CW/2,70)}
+cb(Math.max(0,Math.min(1,(v.currentTime-c.s)/c.l)));if(v.currentTime>=c.s+c.l||v.ended){mr.stop();v.pause();return}requestAnimationFrame(dr)};
+mr.start();v.play().catch(()=>{v.muted=true;v.play()});dr()};
+setTimeout(()=>{if(!go)fail()},20000)})}
+async function a2(){S.pct=0;S.scr="prog";S.out=[];S.cancel=0;S.t0=Date.now();const ids=CL.map((c,i)=>i).filter(i=>S.st[i]==1);S.ids=ids;S.cp=ids.map(()=>0);R();let last=-1;
+for(let k=0;k<ids.length;k++){if(S.cancel)return;const o=await rec(CL[ids[k]],p=>{const q=Math.round(p*100),t=Math.min(99,Math.round((k+p)/ids.length*100));if(S.scr=="prog"&&(t!=last||q!=S.cp[k])){last=t;S.pct=t;S.cp[k]=q;R()}});if(S.cancel)return;if(o){S.cp[k]=100;o.c=Object.assign({},CL[ids[k]],{fmtLabel:CL[ids[k]].fmtLabel});S.out.push(o)}else toast("Couldn’t render clip "+(k+1))}
+S.pct=100;S.scr=S.out.length?"det":"home";toast(S.out.length?"Clips ready. Tap Save or Share.":"Rendering failed. Try a different video.");R()}
+async function redo(){const o=S.out[S.ei];if(!o)return;S.cancel=0;S.ids=[0];S.cp=[0];S.pct=0;S.t0=Date.now();S.scr="prog";R();
+const n=await rec(o.c,p=>{const q=Math.round(p*100);if(S.scr=="prog"&&q!=S.pct){S.pct=q;S.cp[0]=q;R()}},{vurl:o.vurl,words:o.words,F:o.F,hook:S.eh,zm:S.zm,br:S.br,ct:S.ct,esz:S.esz,ey:S.ey,ecol:S.ecol});
+if(n){n.c=o.c;if(o.uri&&B)B.del(o.uri);S.out[S.ei]=n;toast("Clip updated")}else toast("Couldn’t re-render this clip");S.scr="det";R()}
+const ext=t=>t.indexOf("mp4")>-1?"mp4":"webm";
+function toB64(blob){return new Promise(r=>{const f=new FileReader();f.onload=()=>r(String(f.result).split(",")[1]);f.readAsDataURL(blob)})}
+async function savec(i){const o=S.out[i];if(!o)return toast("Render the clip first");if(!B)return toast("Play the clip, then use its menu to download");if(o.uri)return toast("Already saved in Downloads/ClipMe");
+const bl=await(await fetch(o.url)).blob();o.uri=B.save(await toB64(bl),"clipme-"+Date.now()+"-"+(i+1)+"."+ext(o.type),o.type)||"saved"}
+async function sharec(i){const o=S.out[i];if(!o)return;if(!B)return toast("Play the clip, then use its menu to share");if(!o.uri||o.uri=="saved"){o.uri=null;await savec(i)}if(o.uri&&o.uri!="saved"){B.share(o.uri);R()}else toast("Save worked but this Android version can’t share directly. Open it from Files.")}
+function delc(i){if(S.dcf!=i){S.dcf=i;toast("Tap the bin again to delete");return}const o=S.out[i];if(o){if(o.uri&&o.uri!="saved"&&B)B.del(o.uri);try{URL.revokeObjectURL(o.url)}catch(e){}S.out.splice(i,1)}S.dcf=-1;toast("Clip deleted")}
+
+/* ---------- start ---------- */
 try{S.prm=localStorage.getItem("dc_prm")||""}catch(e){}if(!S.prm)S.prm="Find the loudest, most exciting moments. Skip the first 30 seconds.";
-R();toast("🧠 AI Brain active: Phi-3 Mini (Fast)");
+loadM();R();
+if(B)toast(llmReady()?"🧠 AI Brain active: "+act("llm").name:"Tap 🧠 to download an AI model");
 </script></body></html>

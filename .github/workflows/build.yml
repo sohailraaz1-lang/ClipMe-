@@ -14,7 +14,20 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.7"
-      - run: gradle assembleDebug --no-daemon
+      # 1) Full build: includes the on-device LLM engine (llama.cpp compiled by the NDK).
+      - name: Build with on-device LLM
+        id: full
+        continue-on-error: true
+        run: gradle assembleDebug --no-daemon -PwithLlama=true
+      # 2) If the native part fails to compile, still give you a working app (no LLM engine).
+      - name: Fallback build without LLM engine
+        if: steps.full.outcome == 'failure'
+        run: |
+          echo "::warning::Native LLM engine failed to build. Built the app WITHOUT it. Send me the log of the previous step."
+          gradle assembleDebug --no-daemon -PwithLlama=false
+      - name: Summary
+        run: |
+          if [ "${{ steps.full.outcome }}" = "success" ]; then echo "### Built WITH on-device LLM engine" >> $GITHUB_STEP_SUMMARY; else echo "### Built WITHOUT LLM engine (native build failed - see log)" >> $GITHUB_STEP_SUMMARY; fi
       - uses: actions/upload-artifact@v4
         with:
           name: ClipMe-apk

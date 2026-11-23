@@ -5,6 +5,8 @@
         android:label="ClipMe"
         android:icon="@android:drawable/ic_media_play"
         android:extractNativeLibs="true"
+        android:largeHeap="true"
+        android:hardwareAccelerated="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
             android:name=".MainActivity"
