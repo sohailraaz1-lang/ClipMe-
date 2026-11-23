@@ -5,7 +5,7 @@
     active: {llm:"",asr:""}, engine: window.__engine !== false
   };
   const timers = {};
-  window.__log = {saved:[], shared:null, deleted:null, prompts:[], llmCalls:0, prep:0, fetch:[]};
+  window.__log = {saved:[], shared:null, deleted:null, prompts:[], llmCalls:0, prep:0, fetch:[], cancelled:0};
   const all = () => st.llm.concat(st.asr);
   window.AndroidBridge = {
     models(){ return JSON.stringify(st) },
@@ -16,7 +16,11 @@
     mdlUse(id){ const k = st.llm.find(x=>x.id==id)?"llm":"asr"; st.active[k]=id },
     mdlDelete(id){ const m=all().find(x=>x.id==id); m.installed=false; m.size=0; for(const k of ["llm","asr"]) if(st.active[k]==id) st.active[k]="" },
     paste(){ return "https://www.youtube.com/watch?v=abc123" },
-    fetch(url, live){ window.__log.fetch.push([url,live]); setTimeout(()=>window.onDlp("Downloading 50%"),30); setTimeout(()=>window.onDl("video.webm",""),150) },
+    fetch(url, live){ window.__log.fetch.push([url,live]); const m=window.__fetchMode||"ok";
+      if(m=="fail") return setTimeout(()=>window.onDl("","YouTube wants to verify you are not a bot."),60);
+      if(m=="hang") return setTimeout(()=>window.onDlp("Downloading 40%"),30);
+      setTimeout(()=>window.onDlp("Downloading 50%"),30); setTimeout(()=>window.onDl("video.webm",""),150) },
+    fetchCancel(){ window.__log.cancelled++; setTimeout(()=>window.onDl("","Cancelled"),20) },
     info(){ return JSON.stringify({title:"Test Stream", duration:70, heatmap:[[0,35,0.2],[35,70,1.0]]}) },
     prep(l){ window.__log.prep++; setTimeout(()=>window.onModel(true),30) },
     capStart(){}, capChunk(b){},

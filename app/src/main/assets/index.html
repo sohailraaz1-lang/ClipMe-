@@ -43,7 +43,7 @@
 .nw{font-size:10px;font-weight:800;background:var(--am);color:#fff;border-radius:6px;padding:1px 6px;margin-left:6px}
 .warn{background:var(--at);color:var(--am);border-radius:12px;padding:10px;font-weight:600;font-size:13px;margin-bottom:12px}
 .err{color:var(--rd);font-size:12.5px;display:block;margin-top:6px}
-.cta.busy{background:#9CA3AF;pointer-events:none}
+.cta.busy{background:#9CA3AF}
 .rowb{display:flex;gap:8px;align-items:center}
 .btn.sm{padding:7px 10px;font-size:13px}
 </style></head><body><div id="app"></div><div id="t"></div>
@@ -61,7 +61,7 @@ let tm;
 const mb=n=>n>=1e9?(n/1e9).toFixed(1)+" GB":Math.round(n/1e6)+" MB";
 const fmt=s=>new Date(Math.max(0,s)*1e3).toISOString().substr(11,8);
 const key=()=>S.url+"|"+S.tab;
-function toast(m){clearTimeout(tm);$("#t").innerHTML='<div class="toast">'+esc(m)+'</div>';tm=setTimeout(()=>$("#t").innerHTML="",2800)}
+function toast(m,ms){clearTimeout(tm);$("#t").innerHTML='<div class="toast">'+esc(m)+'</div>';tm=setTimeout(()=>$("#t").innerHTML="",ms||2800)}
 const tg=(k,c="")=>`<button class="tg ${c} ${S[k]?"on":""}" data-a="t" data-k="${k}" aria-label="toggle"></button>`;
 const ch=(k,l,v,c="")=>`<button class="ch ${c} ${S[k]===v?"on":""}" data-a="s" data-k="${k}" data-v="${v}">${l}</button>`;
 const head=(i,t,s,x="")=>`<div class="row"><div class="ic">${i}</div><div style="flex:1"><h3>${t}</h3><small>${s}</small></div>${x}</div>`;
@@ -149,7 +149,7 @@ else if(a=="go"){S.scr=v;if(d.mt!==undefined)S.mt=+d.mt;if(v=="mod")loadM();scro
 else if(a=="help")S.help=S.help?0:1;
 else if(a=="swap")S.swap^=1;
 else if(a=="paste"){try{S.url=B?B.paste():await navigator.clipboard.readText();toast("Pasted from your clipboard")}catch(x){toast("Long-press the box and tap Paste")}}
-else if(a=="scan"){scan();return}
+else if(a=="scan"){if(S.busy&&S.dl&&B&&B.fetchCancel){B.fetchCancel();toast("Cancelling…")}else scan();return}
 else if(a=="st")S.st[+d.i]=+v;
 else if(a=="render"){if(!S.st.includes(1))return toast("Approve at least one clip");a2()}
 else if(a=="cancel"){S.cancel=1;S.scr="home"}
@@ -171,8 +171,8 @@ R()});
 document.addEventListener("change",e=>{if(e.target.id=="vf"){const f=e.target.files[0];if(f){S.file=f;S.src=key();S.vurl=URL.createObjectURL(f);S.aurl=S.vurl;S.info=null;S.title=f.name;toast("Loaded "+f.name);R()}}});
 
 /* ---------- video link / file ---------- */
-function getLink(){return new Promise(res=>{window.onDlp=t=>{toast(t);busy(t)};window.onDl=(p,err)=>{if(!p){toast("Couldn’t download: "+(err||"check the link is public"));return res(false)}
-S.file=true;S.vurl="/media/"+p+"?t="+Date.now();S.aurl="/media/video.wav?t="+Date.now();S.src=key();S.info=null;S.title="";try{S.info=JSON.parse(B.info());S.title=S.info&&S.info.title||""}catch(e){}res(true)};busy("Downloading video…");B.fetch(S.url,S.tab=="l"?1:0)})}
+function getLink(){return new Promise(res=>{window.onDlp=t=>{busy(t)};window.onDl=(p,err)=>{S.dl=0;if(!p){if(err!="Cancelled")toast("Couldn’t download: "+(err||"check the link is public"),9000);return res(false)}
+S.file=true;S.vurl="/media/"+p+"?t="+Date.now();S.aurl="/media/video.wav?t="+Date.now();S.src=key();S.info=null;S.title="";try{S.info=JSON.parse(B.info());S.title=S.info&&S.info.title||""}catch(e){}res(true)};S.dl=1;busy("Starting download…");toast("Tap the grey button any time to cancel",3500);B.fetch(S.url,S.tab=="l"?1:0)})}
 function model(){return new Promise(r=>{window.onModel=r;B.prep(S.lang=="English"?"en":"hi")})}
 function rules(){const p=(S.prm||"").toLowerCase(),m=p.match(/skip (?:the )?first (\d+)/);return{skip:m?+m[1]:0,calm:/calm|quiet|story|talk/.test(p)&&!/loud/.test(p)}}
 const lenSec=()=>S.tab=="l"?({"10s (Short)":10,"20s (Reel)":20,"30s (Viral)":30,"60s (Full)":60}[S.dur]||25):(parseInt(S.len)||20);

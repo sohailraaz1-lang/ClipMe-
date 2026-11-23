@@ -143,6 +143,24 @@ with sync_playwright() as p:
     ok("live tab passes live=1 to downloader & uses 10s length", pg.evaluate("__log.fetch.at(-1)[1]")==1 and pg.evaluate("S.out[0].c.l")==10, pg.evaluate("S.out[0].c.l"))
     ok("face check tagged clips", 'Face' in pg.evaluate("S.out[0].c.tag"), pg.evaluate("S.out[0].c.tag"))
     ok("no JS errors overall (no-engine page)", not errs, errs)
+
+    # ---------------- 7. REAL download failure modes (the "stuck on Downloading 0%" bug) ----------------
+    pg,errs=newpage(b); pg.evaluate("window.__fetchMode='fail'")
+    pg.click('[data-a=paste]'); pg.click('#cta')
+    pg.wait_for_function("!S.busy&&document.querySelector('.toast')",timeout=5000)
+    ok("failed download: shows the real reason", 'not a bot' in pg.inner_text('.toast'), pg.inner_text('.toast'))
+    ok("failed download: button recovers (not stuck busy)", pg.evaluate("!S.busy&&!S.dl") and 'Downloading' not in pg.inner_text('#cta'), pg.inner_text('#cta'))
+    pg.close()
+    pg,errs=newpage(b); pg.evaluate("window.__fetchMode='hang'")
+    pg.click('[data-a=paste]'); pg.click('#cta')
+    pg.wait_for_function("S.busy&&S.busy.includes('40%')",timeout=5000)
+    ok("progress text goes in the button, not as spam toasts", 'Downloading 40%' in pg.inner_text('#cta') and 'Downloading 40%' not in pg.inner_text('#t'))
+    pg.click('#cta')                       # busy button must still be tappable
+    pg.wait_for_function("!S.busy",timeout=5000)
+    ok("tapping the busy button cancels a stuck download", pg.evaluate("__log.cancelled")==1)
+    ok("cancel is quiet and resets the UI", 'Couldn’t download' not in pg.inner_text('#t') and pg.evaluate("!S.busy&&!S.dl"))
+    ok("no JS errors in failure/cancel paths", not errs, errs)
+    pg.close()
     b.close()
 fails=[r for r in results if not r[1]]
 print(f"\n{len(results)-len(fails)}/{len(results)} passed"); sys.exit(1 if fails else 0)

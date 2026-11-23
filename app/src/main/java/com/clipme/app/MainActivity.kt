@@ -21,9 +21,6 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.view.WindowManager
 import android.widget.Toast
-import com.yausername.ffmpeg.FFmpeg
-import com.yausername.youtubedl_android.YoutubeDL
-import com.yausername.youtubedl_android.YoutubeDLRequest
 import org.json.JSONArray
 import org.json.JSONObject
 import org.opencv.android.OpenCVLoader
@@ -40,8 +37,6 @@ import java.io.FileInputStream
 import java.io.FilterInputStream
 import java.io.InputStream
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : Activity() {
@@ -54,8 +49,6 @@ class MainActivity : Activity() {
     var loadedAsr = ""
     private val prefs by lazy { getSharedPreferences("clipme", MODE_PRIVATE) }
     private val cancels = ConcurrentHashMap<String, AtomicBoolean>()
-    private val ytReady = CountDownLatch(1)
-    @Volatile private var ytErr: String? = null
 
     fun activeId(kind: String): String {
         val all = if (kind == "llm") Catalog.llm else Catalog.asr
@@ -133,16 +126,7 @@ class MainActivity : Activity() {
             }
         }
         wv.loadUrl("https://clipme.local/index.html")
-        Thread {
-            try {
-                YoutubeDL.getInstance().init(application)
-                FFmpeg.getInstance().init(application)
-            } catch (e: Throwable) {
-                ytErr = e.message ?: e.toString()
-            }
-            ytReady.countDown()
-            if (ytErr == null) try { YoutubeDL.getInstance().updateYoutubeDL(application) } catch (e: Throwable) {}
-        }.start()
+        Fetcher.boot(application)      // starts yt-dlp/ffmpeg, updates yt-dlp BEFORE the first download
     }
 
     override fun onActivityResult(req: Int, res: Int, data: Intent?) {
@@ -171,41 +155,16 @@ class MainActivity : Activity() {
 
         @JavascriptInterface
         fun fetch(url: String, live: Int) {
-            Thread {
-                try {
-                    ytReady.await(90, TimeUnit.SECONDS)
-                    ytErr?.let { throw IllegalStateException("Downloader could not start: $it") }
-                    val dir = File(cacheDir, "dl")
-                    dir.deleteRecursively(); dir.mkdirs()
-                    val r = YoutubeDLRequest(url)
-                    r.addOption("-o", dir.absolutePath + "/video.%(ext)s")
-                    r.addOption("--no-playlist")
-                    r.addOption("-f", "bv*+ba/b")
-                    r.addOption("-S", "res:720,vcodec:h264,acodec:aac")
-                    r.addOption("--merge-output-format", "mp4")
-                    r.addOption("-x")
-                    r.addOption("--audio-format", "wav")
-                    r.addOption("-k")
-                    r.addOption("--write-info-json")      // gives us title, duration and "most replayed" heatmap
-                    r.addOption("--postprocessor-args", "ExtractAudio:-ar 16000 -ac 1")
-                    if (live == 1) {
-                        r.addOption("--downloader", "ffmpeg")
-                        r.addOption("--downloader-args", "ffmpeg:-t 300")
-                    } else {
-                        r.addOption("--download-sections", "*0-1800")
-                    }
-                    YoutubeDL.getInstance().execute(r, callback = { p, _, _ ->
-                        js("onDlp('Downloading " + p.toInt().coerceIn(0, 100) + "%')")
-                    })
-                    val f = dir.listFiles()?.firstOrNull { it.name.startsWith("video.") && it.extension in listOf("mp4", "mkv", "webm", "mov") }
-                    if (f != null && File(dir, "video.wav").exists()) js("onDl('" + f.name + "','')")
-                    else js("onDl('',${JSONObject.quote("Nothing was downloaded (private, age-restricted or members-only video?)")})")
-                } catch (e: Throwable) {
-                    val msg = (e.message ?: e.toString()).trim().takeLast(160)
-                    js("onDl('',${JSONObject.quote(msg)})")
-                }
-            }.start()
+            runOnUiThread { this@MainActivity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+            Fetcher.fetch(application, url, live == 1, { s -> js("onDlp(" + JSONObject.quote(s) + ")") }) { file, err ->
+                if (cancels.isEmpty()) runOnUiThread { this@MainActivity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+                js("onDl(" + JSONObject.quote(file) + "," + JSONObject.quote(err) + ")")
+            }
         }
+
+        /** Tapping the button while it downloads cancels the download. */
+        @JavascriptInterface
+        fun fetchCancel() { Fetcher.cancelFetch() }
 
         /** Title, duration and "most replayed" heatmap of the video fetched by fetch(). */
         @JavascriptInterface

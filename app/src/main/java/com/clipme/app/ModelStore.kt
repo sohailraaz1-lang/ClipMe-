@@ -139,7 +139,7 @@ object Downloader {
         try {
             c.connectTimeout = 15_000
             c.readTimeout = 30_000
-            c.setRequestProperty("User-Agent", "ClipMe/2.1 (Android)")
+            c.setRequestProperty("User-Agent", "ClipMe/2.2 (Android)")
             c.setRequestProperty("Accept-Encoding", "identity")
             if (have > 0) c.setRequestProperty("Range", "bytes=$have-")
             val code = c.responseCode
