@@ -171,7 +171,7 @@ R()});
 document.addEventListener("change",e=>{if(e.target.id=="vf"){const f=e.target.files[0];if(f){S.file=f;S.src=key();S.vurl=URL.createObjectURL(f);S.aurl=S.vurl;S.info=null;S.title=f.name;toast("Loaded "+f.name);R()}}});
 
 /* ---------- video link / file ---------- */
-function getLink(){return new Promise(res=>{window.onDlp=t=>{busy(t)};window.onDl=(p,err)=>{S.dl=0;if(!p){if(err!="Cancelled")toast("Couldn’t download: "+(err||"check the link is public"),9000);return res(false)}
+function getLink(){return new Promise(res=>{window.onDlp=t=>{busy(t)};window.onDl=(p,err)=>{S.dl=0;if(!p){if(err!="Cancelled")toast("Couldn’t download: "+(err||"check the link is public")+" (details copied)",9000);if(B&&B.copyLog)B.copyLog();return res(false)}
 S.file=true;S.vurl="/media/"+p+"?t="+Date.now();S.aurl="/media/video.wav?t="+Date.now();S.src=key();S.info=null;S.title="";try{S.info=JSON.parse(B.info());S.title=S.info&&S.info.title||""}catch(e){}res(true)};S.dl=1;busy("Starting download…");toast("Tap the grey button any time to cancel",3500);B.fetch(S.url,S.tab=="l"?1:0)})}
 function model(){return new Promise(r=>{window.onModel=r;B.prep(S.lang=="English"?"en":"hi")})}
 function rules(){const p=(S.prm||"").toLowerCase(),m=p.match(/skip (?:the )?first (\d+)/);return{skip:m?+m[1]:0,calm:/calm|quiet|story|talk/.test(p)&&!/loud/.test(p)}}

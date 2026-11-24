@@ -36,6 +36,7 @@ object Fetcher {
     @Volatile private var initErr: String? = null
     @Volatile private var cancel = false
     @Volatile private var pid: String? = null
+    @Volatile var lastRaw: String = ""          // full technical error of the last failed download
 
     // ------------------------------------------------------------------ start-up
 
@@ -123,6 +124,7 @@ object Fetcher {
             } catch (e: FetchCancelled) {
                 err = "Cancelled"
             } catch (e: Throwable) {
+                lastRaw = (e.message ?: e.toString()).takeLast(4000)
                 err = friendly(e.message ?: e.toString())
             }
             pid = null

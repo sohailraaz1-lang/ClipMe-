@@ -2,6 +2,7 @@ package com.clipme.app
 
 import android.app.Activity
 import android.content.ClipboardManager
+import android.content.Context
 import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.ApplicationInfo
@@ -159,6 +160,15 @@ class MainActivity : Activity() {
             Fetcher.fetch(application, url, live == 1, { s -> js("onDlp(" + JSONObject.quote(s) + ")") }) { file, err ->
                 if (cancels.isEmpty()) runOnUiThread { this@MainActivity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
                 js("onDl(" + JSONObject.quote(file) + "," + JSONObject.quote(err) + ")")
+            }
+        }
+
+        /** Puts the full technical error of the last failed download on the clipboard (for support). */
+        @JavascriptInterface
+        fun copyLog() {
+            runOnUiThread {
+                val cm = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("ClipMe error", "ClipMe 2.2 download error:\n" + Fetcher.lastRaw))
             }
         }
 
