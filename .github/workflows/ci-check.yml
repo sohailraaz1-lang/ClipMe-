@@ -1,0 +1,22 @@
+name: ci-check
+on: [push, pull_request]
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
+      - run: pip install -r backend/requirements.txt
+      - run: cd backend && python -m py_compile server.py sources.py jobs.py autobox.py clip_engine.py layouts.py
+      - run: cd backend && python -m unittest discover -s tests -v
+  app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: cd app && npm install && npx tsc --noEmit

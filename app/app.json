@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "ClipMe",
+    "slug": "clipme",
+    "version": "2.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0B0C0E",
+    "plugins": [
+      "expo-video",
+      ["expo-notifications", { "color": "#C6FF1A" }],
+      ["expo-media-library", { "photosPermission": "ClipMe saves your finished clips to your gallery.", "savePhotosPermission": "ClipMe saves your finished clips to your gallery.", "isAccessMediaLocationEnabled": false }]
+    ],
+    "android": { "package": "com.clipme.app", "permissions": ["POST_NOTIFICATIONS"] },
+    "ios": { "bundleIdentifier": "com.clipme.app", "infoPlist": { "UIBackgroundModes": ["audio"] } }
+  }
+}
