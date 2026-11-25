@@ -37,7 +37,10 @@ def _ytdlp() -> List[str]:
 def _run(job: Optional[Job], cmd: List[str], timeout: float = 120.0) -> subprocess.CompletedProcess:
     if job:
         job.check()
-    p = job.spawn(cmd) if job else subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        p = job.spawn(cmd) if job else subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    except FileNotFoundError:
+        raise RuntimeError(f"'{cmd[0]}' is not installed on the server.")
     try:
         out, err = p.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -49,7 +52,12 @@ def _run(job: Optional[Job], cmd: List[str], timeout: float = 120.0) -> subproce
 
 
 def _friendly(err: str) -> str:
-    e = (err or "").lower()
+    """Turn yt-dlp's stderr into a short message. Unknown errors include the real details so they can be fixed."""
+    raw = (err or "").strip()
+    e = raw.lower()
+    detail = " | ".join(l.strip() for l in raw.splitlines() if l.strip())[-300:]
+    if "not a bot" in e or "confirm you" in e:
+        return "YouTube is blocking this server (it asks to confirm you're not a bot). Details: " + detail
     if "private" in e or "sign in" in e:
         return "This video is private or needs a login."
     if "not a valid url" in e or "unsupported url" in e:
@@ -58,7 +66,7 @@ def _friendly(err: str) -> str:
         return "That Twitch channel is offline right now."
     if "this live event will begin" in e or "premiere" in e:
         return "That stream hasn't started yet."
-    return "Couldn't read that link. Check it and try again."
+    return "Couldn't read that link. Details: " + (detail or "no error text from yt-dlp")
 
 
 # --------------------------------------------------------------------------------------
