@@ -9,26 +9,44 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
+
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 17 }
+
       - name: Install app dependencies
         working-directory: app
         run: |
           npm install
+          npx expo install expo-asset expo-font expo-constants expo-linking
           npx expo install --fix
-          npm ls expo expo-modules-core --depth=0 || true
+
       - name: Generate the Android project
         working-directory: app
         run: npx expo prebuild --platform android --clean
+
       - name: Build APK
         working-directory: app/android
-        run: ./gradlew assembleRelease --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew assembleRelease --no-daemon --console=plain 2>&1 | tee build.log
+
+      - name: Show the real error
+        if: failure()
+        working-directory: app
+        run: |
+          echo "=== VERSIONS ==="
+          npm ls expo expo-modules-core react-native expo-video expo-asset --depth=0 || true
+          echo "=== FIRST ERRORS ==="
+          grep -n -B2 -A10 "What went wrong" android/build.log | head -80
+
       - uses: actions/upload-artifact@v4
         with:
           name: ClipMe-apk
           path: app/android/app/build/outputs/apk/release/app-release.apk
+
       - name: Publish a download link
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
