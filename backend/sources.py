@@ -56,8 +56,11 @@ def _friendly(err: str) -> str:
     raw = (err or "").strip()
     e = raw.lower()
     detail = " | ".join(l.strip() for l in raw.splitlines() if l.strip())[-300:]
-    if "not a bot" in e or "confirm you" in e:
+    if "sign in to confirm" in e or "not a bot" in e:
         return "YouTube is blocking this server (it asks to confirm you're not a bot). Details: " + detail
+    if "player response" in e or "javascript runtime" in e or "js runtime" in e or "n challenge" in e:
+        return ("The server's YouTube reader is out of date or missing its JavaScript helper (Deno). "
+                "Redeploy the server with the latest Dockerfile. Details: " + detail)
     if "private" in e or "sign in" in e:
         return "This video is private or needs a login."
     if "not a valid url" in e or "unsupported url" in e:

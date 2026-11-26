@@ -1,7 +1,7 @@
 fastapi>=0.115.6        # Starlette>=0.40 => HTTP Range support (needed for video seeking on phones)
 uvicorn[standard]>=0.30
 pydantic>=2.6
-yt-dlp>=2025.1.1        # keep updated: pip install -U yt-dlp
+yt-dlp[default]>=2025.11.12
 # optional
 opencv-python-headless>=4.9   # automatic facecam detection
 faster-whisper>=1.0           # word-by-word captions (toggle in the app)

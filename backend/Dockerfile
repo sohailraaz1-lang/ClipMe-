@@ -1,8 +1,11 @@
 FROM python:3.12-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core fonts-dejavu-extra && rm -rf /var/lib/apt/lists/*
+# yt-dlp now needs a JavaScript runtime (Deno) to read YouTube
+COPY --from=denoland/deno:bin /deno /usr/local/bin/deno
+ENV DENO_DIR=/tmp/deno
 WORKDIR /srv
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -U -r requirements.txt && deno --version && yt-dlp --version
 COPY . .
 ENV CLIPME_MEDIA_DIR=/tmp/clipme
 EXPOSE 10000
