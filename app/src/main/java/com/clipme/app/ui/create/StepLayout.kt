@@ -285,7 +285,7 @@ private fun PresetGrid(
     onHideCam: (Boolean) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        LayoutPreset.values().chunked(3).forEach { rowPresets ->
+        LayoutPreset.values().toList().chunked(3).forEach { rowPresets ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 rowPresets.forEach { preset ->
                     PresetCell(
