@@ -146,10 +146,10 @@ data class ExportSettings(
     val quality: ExportQuality = ExportQuality.P1080
 )
 
-/** Output resolution of the vertical clip. */
+/** Output resolution of the vertical 9:16 clip. */
 enum class ExportQuality(val id: String, val height: Int) {
-    P1080("1080p", 1080),
-    P720("720p", 720)
+    P1080("1080p", 1920),
+    P720("720p", 1280)
 }
 
 /** A rectangle in normalized (0..1) coordinates. */

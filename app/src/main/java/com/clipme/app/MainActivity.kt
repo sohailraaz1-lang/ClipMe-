@@ -83,9 +83,20 @@ class MainActivity : ComponentActivity() {
 
     /** Shares an exported clip via the system share sheet. */
     private fun shareClip(item: ClipItem) {
+        val shareUri = if (item.uri.scheme == "file" && item.filePath.isNotBlank()) {
+            runCatching {
+                androidx.core.content.FileProvider.getUriForFile(
+                    this,
+                    "com.clipme.app.fileprovider",
+                    java.io.File(item.filePath)
+                )
+            }.getOrDefault(item.uri)
+        } else {
+            item.uri
+        }
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "video/mp4"
-            putExtra(Intent.EXTRA_STREAM, item.uri)
+            putExtra(Intent.EXTRA_STREAM, shareUri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         runCatching { startActivity(Intent.createChooser(send, "Share clip")) }

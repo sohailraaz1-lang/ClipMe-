@@ -5,23 +5,19 @@ import com.clipme.app.model.CaptionLine
 import com.clipme.app.model.CaptionWord
 import com.clipme.app.util.FileUtils
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
-import org.vosk.Model
-import org.vosk.Recognizer
 import org.json.JSONArray
 import org.json.JSONObject
+import org.vosk.Model
+import org.vosk.Recognizer
 import java.io.File
 import java.io.RandomAccessFile
 
 /**
  * Offline word-by-word transcription using Vosk.
  *
- * Vosk's partial result includes per-word timestamps for the recognized
- * utterance ("result" array with start/end). We collect those and map them
- * onto clip-local time (0 = clip start).
+ * Vosk returns per-word timestamps ("result" array with start/end). We collect
+ * those and map them onto clip-local time (0 = clip start).
  */
 class CaptionEngine(
     private val context: Context,
@@ -33,93 +29,88 @@ class CaptionEngine(
         data class Failed(val message: String) : CaptionResult
     }
 
-    /** Transcribes the given clip file and returns word-accurate captions. */
+    /** Transcribes the given file and returns word-accurate captions for [clipStartMs..clipStartMs+clipDurationMs]. */
     suspend fun transcribeClip(
         clipFile: File,
         clipStartMs: Long,
-        clipEndMs: Long = Long.MAX_VALUE,
+        clipDurationMs: Long = Long.MAX_VALUE,
         onProgress: (Float) -> Unit = {}
     ): CaptionResult = withContext(Dispatchers.IO) {
         if (!modelManager.isReady()) return@withContext CaptionResult.Failed("Caption model not downloaded")
-        runCatching {
-            val wav = PcmExtractor.extract(context, clipFile, onProgress)
-            try {
-                val model = Model(modelManager.modelDir().absolutePath)
-                val recognizer = Recognizer(model, PcmExtractor.SAMPLE_RATE.toFloat())
-                recognizer.setWords(true)
-                val words = mutableListOf<CaptionWord>()
-                var pendingText = StringBuilder()
-                val total = wav.length()
-                var done = 0L
+        val wav = PcmExtractor.extract(context, clipFile) { p -> onProgress(p * 0.45f) }
+        try {
+            val model = Model(modelManager.modelDir().absolutePath)
+            val recognizer = Recognizer(model, PcmExtractor.SAMPLE_RATE.toFloat())
+            recognizer.setWords(true)
+            val words = mutableListOf<CaptionWord>()
+            val total = wav.length().coerceAtLeast(1L)
+            var done = 0L
 
+            try {
                 RandomAccessFile(wav, "r").use { raf ->
                     // Skip the 44-byte WAV header.
-                    raf.seek(44)
+                    if (raf.length() > 44L) raf.seek(44L)
                     val buffer = ByteArray(8192)
                     while (true) {
                         val n = raf.read(buffer)
                         if (n < 0) break
                         done += n
                         val finished = recognizer.acceptWaveForm(buffer, n)
-                        val json = if (finished) {
-                            recognizer.result
-                        } else {
-                            recognizer.partialResult
-                        }
-                        onProgress((done.toFloat() / total).coerceIn(0f, 1f))
-
+                        onProgress((0.45f + (done.toFloat() / total) * 0.55f).coerceIn(0f, 1f))
                         if (finished) {
-                            val arr = JSONObject(json).optJSONArray("result") ?: JSONArray()
-                            for (i in 0 until arr.length()) {
-                                val w = arr.getJSONObject(i)
-                                val start = (w.optDouble("start", 0.0) * 1000).toLong()
-                                val end = (w.optDouble("end", 0.0) * 1000).toLong()
-                                val text = w.optString("word", "").trim()
-                                if (text.isNotEmpty()) {
-                                    words.add(CaptionWord(text, start, end))
-                                }
-                            }
-                        } else {
-                            pendingText = StringBuilder(JSONObject(json).optString("partial", ""))
+                            collectWords(recognizer.result, words)
                         }
                     }
-                    // Flush the last words that were still buffered inside the recognizer.
-                    val tail = JSONObject(recognizer.finalResult).optJSONArray("result") ?: JSONArray()
-                    for (i in 0 until tail.length()) {
-                        val w = tail.getJSONObject(i)
-                        val text = w.optString("word", "").trim()
-                        if (text.isNotEmpty()) {
-                            words.add(
-                                CaptionWord(
-                                    text,
-                                    (w.optDouble("start", 0.0) * 1000).toLong(),
-                                    (w.optDouble("end", 0.0) * 1000).toLong()
-                                )
-                            )
-                        }
-                    }
+                    collectWords(recognizer.finalResult, words)
                 }
-                recognizer.close()
-                model.close()
-
-                // The whole downloaded window is transcribed; keep only words that fall inside this clip.
-                val inClip = words.filter { it.endMs > clipStartMs && it.startMs < clipEndMs }
-                val lines = groupWordsIntoLines(inClip, clipStartMs)
-                if (lines.isEmpty()) {
-                    CaptionResult.Failed("No speech was recognized in this clip")
-                } else {
-                    CaptionResult.Done(lines)
-                }
-            } catch (t: Throwable) {
-                CaptionResult.Failed(t.message ?: "Transcription failed")
             } finally {
-                FileUtils.deleteQuietly(wav)
+                runCatching { recognizer.close() }
+                runCatching { model.close() }
             }
-        }.getOrElse { CaptionResult.Failed(it.message ?: "Transcription failed") }
+
+            val lines = groupWordsIntoLines(words, clipStartMs, clipDurationMs)
+            if (lines.isEmpty()) {
+                CaptionResult.Failed("No speech was recognized in this clip")
+            } else {
+                CaptionResult.Done(lines)
+            }
+        } catch (t: Throwable) {
+            CaptionResult.Failed(t.message ?: "Transcription failed")
+        } finally {
+            FileUtils.deleteQuietly(wav)
+        }
     }
 
-    /** Groups words into timed subtitle lines (roughly sentence chunks). */
-    private fun groupWordsIntoLines(words: List<CaptionWord>, clipStartMs: Long): List<CaptionLine> {
+    private fun collectWords(json: String?, out: MutableList<CaptionWord>) {
+        if (json.isNullOrBlank()) return
+        val arr = runCatching { JSONObject(json).optJSONArray("result") }.getOrNull() ?: JSONArray()
+        for (i in 0 until arr.length()) {
+            val w = arr.getJSONObject(i)
+            val start = (w.optDouble("start", 0.0) * 1000).toLong()
+            val end = (w.optDouble("end", 0.0) * 1000).toLong()
+            val text = w.optString("word", "").trim()
+            if (text.isNotEmpty()) {
+                out.add(CaptionWord(text, start, end))
+            }
+        }
+    }
+
+    /** Groups words into timed subtitle lines within [clipStartMs..clipStartMs+clipDurationMs]. */
+    private fun groupWordsIntoLines(
+        words: List<CaptionWord>,
+        clipStartMs: Long,
+        clipDurationMs: Long
+    ): List<CaptionLine> {
+        val clipEndMs = if (clipDurationMs == Long.MAX_VALUE) Long.MAX_VALUE else clipStartMs + clipDurationMs
+        val filtered = words.mapNotNull { w ->
+            if (w.endMs <= clipStartMs || w.startMs >= clipEndMs) return@mapNotNull null
+            CaptionWord(
+                text = w.text,
+                startMs = (w.startMs - clipStartMs).coerceAtLeast(0L),
+                endMs = (w.endMs - clipStartMs).coerceAtMost(clipDurationMs)
+            )
+        }
+
         val lines = mutableListOf<CaptionLine>()
         var current = mutableListOf<CaptionWord>()
         var lineStart = -1L
@@ -131,15 +122,15 @@ class CaptionEngine(
                 lines.add(
                     CaptionLine(
                         words = current.toList(),
-                        startMs = (lineStart - clipStartMs).coerceAtLeast(0L),
-                        endMs = (lineEnd - clipStartMs).coerceAtLeast(0L)
+                        startMs = lineStart.coerceAtLeast(0L),
+                        endMs = lineEnd.coerceAtLeast(lineStart + 100L)
                     )
                 )
                 current.clear()
             }
         }
 
-        for (w in words) {
+        for (w in filtered) {
             val gap = if (lastWordEnd >= 0) w.startMs - lastWordEnd else 0L
             val punctuationBreak = w.text.endsWith(".") || w.text.endsWith("?") || w.text.endsWith("!")
             if (current.isNotEmpty() && (gap > 700 || (current.size >= 4 && punctuationBreak) || current.size >= 6)) {

@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -113,7 +115,7 @@ fun StepStream(
                 onGameRect = onGameRect,
                 onCamRect = onCamRect,
                 selectingCam = selectingCam,
-                onToggleSelect = { selectingCam = !selectingCam },
+                onSelectCam = { selectingCam = it },
                 sourceLoaded = sourceLoaded
             )
         }
@@ -211,7 +213,7 @@ private fun StreamContent(
     onGameRect: (NormRect) -> Unit,
     onCamRect: (NormRect) -> Unit,
     selectingCam: Boolean,
-    onToggleSelect: () -> Unit,
+    onSelectCam: (Boolean) -> Unit,
     sourceLoaded: Boolean
 ) {
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
@@ -255,6 +257,7 @@ private fun StreamContent(
                     frame = frame,
                     gameRect = gameRect,
                     camRect = camRect,
+                    selectingCam = selectingCam,
                     onGameRect = onGameRect,
                     onCamRect = onCamRect
                 )
@@ -267,9 +270,9 @@ private fun StreamContent(
         Spacer(Modifier.height(12.dp))
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Chip("GAME", selected = !selectingCam, color = Lime, onClick = { selectingCam = false })
+            Chip("GAME", selected = !selectingCam, color = Lime, onClick = { onSelectCam(false) })
             if (camRect != null) {
-                Chip("CAM", selected = selectingCam, color = PinkCam, onClick = { selectingCam = true })
+                Chip("CAM", selected = selectingCam, color = PinkCam, onClick = { onSelectCam(true) })
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -290,7 +293,7 @@ private fun StreamContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 CircularProgressIndicator(
-                    progress = downloadProgress.coerceIn(0f, 1f),
+                    progress = { downloadProgress.coerceIn(0f, 1f) },
                     color = Lime,
                     strokeWidth = 3.dp,
                     modifier = Modifier.size(22.dp)
@@ -340,6 +343,7 @@ private fun FrameSelector(
     frame: android.graphics.Bitmap,
     gameRect: NormRect,
     camRect: NormRect?,
+    selectingCam: Boolean,
     onGameRect: (NormRect) -> Unit,
     onCamRect: (NormRect) -> Unit
 ) {
@@ -350,18 +354,33 @@ private fun FrameSelector(
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Fit
         )
-        DraggableRect(
-            rect = gameRect,
-            color = Lime,
-            label = "GAME",
-            onChange = onGameRect
-        )
-        if (camRect != null) {
+        if (selectingCam || camRect == null) {
+            DraggableRect(
+                rect = gameRect,
+                color = Lime,
+                label = "GAME",
+                onChange = onGameRect
+            )
+            if (camRect != null) {
+                DraggableRect(
+                    rect = camRect,
+                    color = PinkCam,
+                    label = "CAM",
+                    onChange = onCamRect
+                )
+            }
+        } else {
             DraggableRect(
                 rect = camRect,
                 color = PinkCam,
                 label = "CAM",
                 onChange = onCamRect
+            )
+            DraggableRect(
+                rect = gameRect,
+                color = Lime,
+                label = "GAME",
+                onChange = onGameRect
             )
         }
     }
@@ -375,16 +394,22 @@ private fun DraggableRect(
     label: String,
     onChange: (NormRect) -> Unit
 ) {
+    val density = LocalDensity.current
+    val currentRect by rememberUpdatedState(rect)
+    val currentOnChange by rememberUpdatedState(onChange)
+
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val boxW = maxWidth
         val boxH = maxHeight
-        val wPx = boxW.value
-        val hPx = boxH.value
+        val wDp = boxW.value
+        val hDp = boxH.value
+        val wPx = with(density) { boxW.toPx() }.coerceAtLeast(1f)
+        val hPx = with(density) { boxH.toPx() }.coerceAtLeast(1f)
 
-        val leftDp = (rect.left * wPx).dp
-        val topDp = (rect.top * hPx).dp
-        val widthDp = (rect.width * wPx).dp
-        val heightDp = (rect.height * hPx).dp
+        val leftDp = (rect.left * wDp).dp
+        val topDp = (rect.top * hDp).dp
+        val widthDp = (rect.width * wDp).dp
+        val heightDp = (rect.height * hDp).dp
 
         Box(
             Modifier
@@ -393,18 +418,17 @@ private fun DraggableRect(
                 .height(heightDp)
                 .border(2.dp, color, RoundedCornerShape(6.dp))
                 .background(color.copy(alpha = 0.10f))
-                .pointerInput(Unit) {
+                .pointerInput(wPx, hPx) {
                     detectDragGestures { change, dragAmount ->
                         change.consume()
+                        val r = currentRect
                         val dx = dragAmount.x / wPx
                         val dy = dragAmount.y / hPx
-                        var l = (rect.left + dx).coerceIn(0f, 0.9f)
-                        var t = (rect.top + dy).coerceIn(0f, 0.9f)
-                        val w = rect.width
-                        val h = rect.height
-                        l = l.coerceAtMost(1f - w)
-                        t = t.coerceAtMost(1f - h)
-                        onChange(NormRect(l, t, l + w, t + h))
+                        val w = r.width
+                        val h = r.height
+                        val l = (r.left + dx).coerceIn(0f, (1f - w).coerceAtLeast(0f))
+                        val t = (r.top + dy).coerceIn(0f, (1f - h).coerceAtLeast(0f))
+                        currentOnChange(NormRect(l, t, l + w, t + h))
                     }
                 }
         ) {
@@ -424,18 +448,17 @@ private fun DraggableRect(
                     .align(Alignment.BottomEnd)
                     .size(20.dp)
                     .background(color, RoundedCornerShape(topStart = 6.dp))
-                    .pointerInput(Unit) {
+                    .pointerInput(wPx, hPx) {
                         detectDragGestures { change, dragAmount ->
                             change.consume()
+                            val r = currentRect
                             val dx = dragAmount.x / wPx
                             val dy = dragAmount.y / hPx
-                            var w = rect.width + dx
-                            var h = rect.height + dy
                             val minW = 0.05f
                             val minH = 0.05f
-                            w = w.coerceIn(minW, 1f - rect.left)
-                            h = h.coerceIn(minH, 1f - rect.top)
-                            onChange(NormRect(rect.left, rect.top, rect.left + w, rect.top + h))
+                            val w = (r.width + dx).coerceIn(minW, (1f - r.left).coerceAtLeast(minW))
+                            val h = (r.height + dy).coerceIn(minH, (1f - r.top).coerceAtLeast(minH))
+                            currentOnChange(NormRect(r.left, r.top, r.left + w, r.top + h))
                         }
                     }
             )

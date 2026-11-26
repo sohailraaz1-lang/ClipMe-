@@ -7,11 +7,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -63,6 +65,7 @@ private val STEP_3_HELP = listOf(
 fun StepLayout(
     settings: ExportSettings,
     clipCount: Int,
+    hasCaptions: Boolean,
     transcribing: Boolean,
     captionProgress: Float,
     exportState: ExportUiState,
@@ -160,7 +163,7 @@ fun StepLayout(
                     Text("TRANSCRIBING… ${(captionProgress * 100).toInt()}%", fontWeight = FontWeight.Bold)
                 } else {
                     Text(
-                        if (settings.captionLines.isNotEmpty()) "RE-TRANSCRIBE CAPTIONS" else "TRANSCRIBE CAPTIONS",
+                        if (hasCaptions) "RE-TRANSCRIBE CAPTIONS" else "TRANSCRIBE CAPTIONS",
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp
                     )
@@ -320,7 +323,7 @@ private fun PresetGrid(
 }
 
 @Composable
-private fun PresetCell(
+private fun RowScope.PresetCell(
     preset: LayoutPreset,
     selected: Boolean,
     onClick: () -> Unit
@@ -413,7 +416,7 @@ private fun PresetGlyph(preset: LayoutPreset, selected: Boolean) {
 }
 
 @Composable
-private fun StyleChip(
+private fun RowScope.StyleChip(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,

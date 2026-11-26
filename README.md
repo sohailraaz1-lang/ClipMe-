@@ -60,18 +60,28 @@ app/src/main/java/com/clipme/app/
 └── util/                      # FileUtils, BitmapUtils, TextRenderer, image loaders, stopwatch
 ```
 
-## Building (GitHub Actions)
+## Building
 
-1. Create a GitHub repo and upload everything inside this folder (so `build.gradle.kts` is at the repo root, with the hidden `.github` folder included).
-2. Open the **Actions** tab, pick **Build ClipMe APK** and press **Run workflow** (it also runs on every push).
-3. When it finishes, open the run and download the **ClipMe-debug-apk** artifact, unzip it and install `app-debug.apk` on your phone (allow "install unknown apps").
-4. If the build fails, open the failed step and copy the red error lines.
+Requires **Android Studio (Meerkat / 2024.2 or newer)** or a machine with the
+Android SDK, JDK 17 and Gradle.
 
-Local build: Android Studio (2024.2+), JDK 17, Gradle 8.9 -> `gradle assembleDebug`.
+1. Open the `ClipMe/` folder in Android Studio.
+2. Wait for Gradle sync to finish (first sync downloads dependencies — this can take a while; the Vosk + NewPipe + ML Kit artifacts are large).
+3. Run the `app` configuration, or:
+   ```bash
+   ./gradlew assembleDebug
+   ```
+4. Install the resulting `app/build/outputs/apk/debug/app-debug.apk`.
+
+> **On-device requirements:** the Vosk caption model (~40 MB) is fetched once
+> over the network on first use and cached in the app's files directory. Everything
+> after that — extraction, captions, rendering, export — runs fully offline.
 
 ## Notes
 
 - API 26+ (Android 8.0+), target SDK 35.
-- Export runs as a foreground service: `mediaProcessing` on Android 15, `dataSync` on Android 10-14.
-- The Vosk caption model (~40 MB, English only) downloads once on first use.
-- The code has not been compiled by its author. Expect to fix a few compile errors from the first CI log.
+- `POST_NOTIFICATIONS` is requested on launch so the export foreground service can
+  show its progress; if it is denied the export still runs, just without a notification.
+- This repository was authored in an environment without a JDK/Android SDK, so the
+  code has been syntax-checked but **not compiled** here. Build it in Android Studio
+  or CI as described above.

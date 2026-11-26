@@ -189,11 +189,13 @@ class HlsWindowDownloader(
                 muxer.start()
                 started = true
 
-                for ((i, src) in allVideo.withIndex()) {
-                    writeSource(muxer, videoTrack, src)
+                var videoOffsetUs = 0L
+                for (src in allVideo) {
+                    videoOffsetUs = writeSource(muxer, videoTrack, src, videoOffsetUs, 33_333L)
                 }
+                var audioOffsetUs = 0L
                 for (src in allAudio) {
-                    writeSource(muxer, audioTrack, src)
+                    audioOffsetUs = writeSource(muxer, audioTrack, src, audioOffsetUs, 21_333L)
                 }
             } finally {
                 (allVideo + allAudio).forEach { it.close() }
@@ -204,27 +206,37 @@ class HlsWindowDownloader(
         }
     }
 
-    private fun writeSource(muxer: MediaMuxer, track: Int, src: SampleSource) {
+    private fun writeSource(
+        muxer: MediaMuxer,
+        track: Int,
+        src: SampleSource,
+        offsetUs: Long,
+        defaultStepUs: Long
+    ): Long {
         val buffer = ByteBuffer.allocate(src.sampleBufferSize.coerceAtLeast(1 shl 16))
         val info = MediaCodec.BufferInfo()
         var baseTs = -1L
+        var maxTs = offsetUs
         while (true) {
             buffer.clear()
             val n = src.extractor.readSampleData(buffer, 0)
             if (n < 0) break
             info.size = n
             info.offset = 0
-            info.presentationTimeUs = src.extractor.sampleTime
+            val rawTs = src.extractor.sampleTime
             info.flags = src.extractor.sampleFlags
             if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) {
                 src.extractor.advance()
                 continue
             }
-            if (baseTs < 0) baseTs = info.presentationTimeUs
-            info.presentationTimeUs -= baseTs
+            if (baseTs < 0) baseTs = rawTs
+            val pts = (offsetUs + (rawTs - baseTs)).coerceAtLeast(0L)
+            info.presentationTimeUs = pts
+            if (pts > maxTs) maxTs = pts
             muxer.writeSampleData(track, buffer, info)
             src.extractor.advance()
         }
+        return maxTs + defaultStepUs
     }
 
     private fun newWorkDir(): File {
@@ -248,7 +260,7 @@ private class SampleSource private constructor(val extractor: MediaExtractor, va
                 val mime = f.getString(MediaFormat.KEY_MIME) ?: continue
                 if (mime.startsWith("video/") || mime.startsWith("audio/")) {
                     ex.selectTrack(i)
-                    return SampleSource(ex, f, if (f.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) f.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE) else 1 shl 20)
+                    return SampleSource(ex, f, f.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 1 shl 20))
                 }
             }
             ex.release()

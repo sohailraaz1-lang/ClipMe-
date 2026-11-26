@@ -34,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,6 +42,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -286,34 +289,43 @@ private fun StickerItem(
     onSelect: () -> Unit,
     onMove: (StickerPlacement) -> Unit
 ) {
-    val px = placement.cx * canvasW
-    val py = placement.cy * canvasH
-    val sizePx = placement.scale * canvasW
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val canvasWPx = with(density) { canvasW.dp.toPx() }.coerceAtLeast(1f)
+    val canvasHPx = with(density) { canvasH.dp.toPx() }.coerceAtLeast(1f)
+    val currentPlacement by rememberUpdatedState(placement)
+    val currentOnMove by rememberUpdatedState(onMove)
+    val currentOnSelect by rememberUpdatedState(onSelect)
+
+    val xDp = placement.cx * canvasW
+    val yDp = placement.cy * canvasH
+    val sizeDp = placement.scale * canvasW
 
     Box(
         Modifier
             .offset(
-                x = (px - sizePx / 2f).dp,
-                y = (py - sizePx / 2f).dp
+                x = (xDp - sizeDp / 2f).dp,
+                y = (yDp - sizeDp / 2f).dp
             )
-            .size(sizePx.dp)
+            .size(sizeDp.dp)
             .border(
                 if (selected) 2.dp else 1.dp,
                 if (selected) PinkCam else Color.Transparent,
                 RoundedCornerShape(8.dp)
             )
             .pointerInput(Unit) {
-                detectTapGestures(onTap = { onSelect() })
+                detectTapGestures(onTap = { currentOnSelect() })
             }
-            .pointerInput(Unit) {
+            .pointerInput(canvasWPx, canvasHPx) {
                 detectDragGestures { change, dragAmount ->
                     change.consume()
-                    val dx = dragAmount.x / canvasW
-                    val dy = dragAmount.y / canvasH
-                    onMove(
-                        placement.copy(
-                            cx = (placement.cx + dx).coerceIn(0f, 1f),
-                            cy = (placement.cy + dy).coerceIn(0f, 1f)
+                    val p = currentPlacement
+                    val dx = dragAmount.x / canvasWPx
+                    val dy = dragAmount.y / canvasHPx
+                    currentOnMove(
+                        p.copy(
+                            cx = (p.cx + dx).coerceIn(0f, 1f),
+                            cy = (p.cy + dy).coerceIn(0f, 1f)
                         )
                     )
                 }
@@ -321,11 +333,11 @@ private fun StickerItem(
     ) {
         if (placement.isEmoji) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(placement.label, fontSize = (sizePx * 0.72f).sp)
+                Text(placement.label, fontSize = (sizeDp * 0.72f).sp)
             }
         } else {
             val bmp = remember(placement.id) {
-                ImageLoaders.decodeFile(File(stickerCacheDir(), "${placement.id}.png"))
+                ImageLoaders.decodeFile(File(File(context.cacheDir, "cm_stickers"), "${placement.id}.png"))
             }
             if (bmp != null) {
                 androidx.compose.foundation.Image(

@@ -1,6 +1,9 @@
 package com.clipme.app.util
 
+import android.content.ContentValues
 import android.content.Context
+import android.media.MediaScannerConnection
+import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import java.io.File
@@ -24,38 +27,52 @@ object FileUtils {
         return dir
     }
 
-    /** Public copy of a clip registered with the MediaStore so it survives app uninstall. */
+    /** Public copy of a clip registered with MediaStore so it survives app uninstall. */
     fun publishToGallery(context: Context, src: File): File {
+        val displayName = if (src.name.startsWith("clip_") && src.name.endsWith(".mp4")) {
+            src.name
+        } else {
+            newClipFileName()
+        }
         return try {
-            val dir = exportDir(context)
-            val dest = File(dir, src.name)
-            src.copyTo(dest, overwrite = true)
-            val values = android.content.ContentValues().apply {
-                put(MediaStore.Video.Media.DISPLAY_NAME, src.name)
-                put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-                put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/ClipMe")
-                put(MediaStore.Video.Media.IS_PENDING, 1)
-            }
-            val uri = context.contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
-            if (uri != null) {
-                context.contentResolver.openOutputStream(uri)?.use { out ->
-                    dest.inputStream().use { it.copyTo(out) }
+            if (Build.VERSION.SDK_INT >= 29) {
+                val values = ContentValues().apply {
+                    put(MediaStore.Video.Media.DISPLAY_NAME, displayName)
+                    put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+                    put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/ClipMe")
+                    put(MediaStore.Video.Media.IS_PENDING, 1)
                 }
-                values.clear()
-                values.put(MediaStore.Video.Media.IS_PENDING, 0)
-                context.contentResolver.update(uri, values, null, null)
-                dest
+                val uri = context.contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
+                if (uri != null) {
+                    context.contentResolver.openOutputStream(uri)?.use { out ->
+                        src.inputStream().use { it.copyTo(out) }
+                    }
+                    values.clear()
+                    values.put(MediaStore.Video.Media.IS_PENDING, 0)
+                    context.contentResolver.update(uri, values, null, null)
+                }
+                File(exportDir(context), displayName)
             } else {
+                val dir = exportDir(context)
+                var dest = File(dir, displayName)
+                var i = 1
+                while (dest.exists()) {
+                    dest = File(dir, displayName.removeSuffix(".mp4") + "_$i.mp4")
+                    i++
+                }
+                src.copyTo(dest, overwrite = true)
+                MediaScannerConnection.scanFile(context, arrayOf(dest.absolutePath), arrayOf("video/mp4"), null)
                 dest
             }
-        } catch (t: Throwable) {
+        } catch (_: Throwable) {
             src
         }
     }
 
     fun newClipFileName(): String {
         val stamp = SimpleDateFormat("MMdd_HHmmss", Locale.US).format(Date())
-        return "clip_${stamp}.mp4"
+        val seq = fileSeq.incrementAndGet()
+        return "clip_${stamp}_${seq}.mp4"
     }
 
     fun uniqueExportPath(context: Context): File {

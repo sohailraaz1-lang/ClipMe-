@@ -51,7 +51,7 @@ fun CreateFlowScreen(vm: CreateViewModel = viewModel()) {
             onUrlChange = vm::onUrlChange,
             onCheck = vm::checkLink,
             onDownload = vm::downloadWindow,
-            onContinue = vm::makeClips,
+            onContinue = vm::downloadWindow,
             downloading = s.downloading,
             downloadProgress = s.downloadProgress,
             frame = s.frame,
@@ -78,9 +78,11 @@ fun CreateFlowScreen(vm: CreateViewModel = viewModel()) {
 
         Step.LAYOUT -> {
             val export by vm.exportState.collectAsState()
+            val hasCaptions = s.captions.values.any { it.isNotEmpty() }
             StepLayout(
                 settings = s.settings,
                 clipCount = s.ranges.size,
+                hasCaptions = hasCaptions,
                 transcribing = s.transcribing,
                 captionProgress = s.captionProgress,
                 exportState = export,

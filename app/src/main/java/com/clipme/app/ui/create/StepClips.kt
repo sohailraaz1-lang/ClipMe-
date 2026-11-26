@@ -31,11 +31,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -204,16 +206,20 @@ private fun TimelineBar(
             .height(trackH)
             .background(InkElevated, RoundedCornerShape(12.dp))
     ) {
+        val currentDuration by rememberUpdatedState(duration)
+        val currentOnAddRange by rememberUpdatedState(onAddRange)
+
         // Base "empty" area — tapping adds a 30s clip.
         Box(
             Modifier
                 .fillMaxSize()
                 .background(Color.Transparent)
                 .pointerInput(Unit) {
-                    androidx.compose.foundation.gestures.detectTapGestures { offset ->
+                    detectTapGestures { offset ->
+                        val dur = currentDuration
                         val frac = (offset.x / this.size.width.toFloat()).coerceIn(0f, 1f)
-                        val start = (frac * duration).toLong()
-                        onAddRange(start, minOf(start + 30_000L, duration))
+                        val start = (frac * dur).toLong()
+                        currentOnAddRange(start, minOf(start + 30_000L, dur))
                     }
                 }
         )
@@ -225,7 +231,7 @@ private fun TimelineBar(
                 duration = duration,
                 selected = index == selectedRange,
                 onSelect = { onSelectRange(index) },
-                onMove = { newStart -> onUpdateRange(index, newStart, newStart + range.durationMs) }
+                onUpdate = { newStart, newEnd -> onUpdateRange(index, newStart, newEnd) }
             )
         }
     }
@@ -243,55 +249,81 @@ private fun ClipSegment(
     duration: Long,
     selected: Boolean,
     onSelect: () -> Unit,
-    onMove: (Long) -> Unit
+    onUpdate: (Long, Long) -> Unit
 ) {
     val wFrac = (range.durationMs.toFloat() / duration).coerceIn(0f, 1f)
     val lFrac = (range.startMs.toFloat() / duration).coerceIn(0f, 1f)
     val color = if (selected) PinkCam else Lime
+    val density = LocalDensity.current
+    val currentRange by rememberUpdatedState(range)
+    val currentDuration by rememberUpdatedState(duration)
+    val currentOnUpdate by rememberUpdatedState(onUpdate)
 
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val trackW = this.maxWidth
-        val leftPx = lFrac * trackW.value
-        val widthPx = wFrac * trackW.value
+        val leftDp = lFrac * trackW.value
+        val widthDp = wFrac * trackW.value
+        val trackPx = with(density) { trackW.toPx() }.coerceAtLeast(1f)
 
         Box(
             Modifier
-                .offset(x = leftPx.dp, y = 0.dp)
-                .width(widthPx.dp)
+                .offset(x = leftDp.dp, y = 0.dp)
+                .width(widthDp.dp)
                 .height(72.dp)
                 .background(color.copy(alpha = if (selected) 0.35f else 0.2f))
                 .border(2.dp, color, RoundedCornerShape(8.dp))
-                .pointerInput(Unit) {
+                .clickable { onSelect() }
+                .pointerInput(trackPx) {
                     androidx.compose.foundation.gestures.detectDragGestures { change, dragAmount ->
                         change.consume()
-                        val dx = dragAmount.x / trackW.value
-                        val newStart = ((lFrac + dx).coerceIn(0f, 1f - wFrac) * duration).toLong()
-                        onMove(newStart.coerceIn(0L, duration - range.durationMs))
+                        val r = currentRange
+                        val dur = currentDuration
+                        val deltaMs = ((dragAmount.x / trackPx) * dur).toLong()
+                        val maxStart = (dur - r.durationMs).coerceAtLeast(0L)
+                        val newStart = (r.startMs + deltaMs).coerceIn(0L, maxStart)
+                        currentOnUpdate(newStart, newStart + r.durationMs)
                     }
                 }
         ) {
+            // Left edge handle resizes startMs.
             Box(
                 Modifier
                     .align(Alignment.CenterStart)
-                    .width(10.dp)
+                    .width(12.dp)
                     .fillMaxHeight()
                     .background(color)
-                    .pointerInput(Unit) {
+                    .pointerInput(trackPx) {
                         androidx.compose.foundation.gestures.detectDragGestures { change, dragAmount ->
                             change.consume()
-                            val dx = dragAmount.x / trackW.value
-                            val newStart = ((lFrac + dx).coerceIn(0f, 1f) * duration).toLong()
-                            val newEnd = newStart + range.durationMs
-                            if (newEnd <= duration) onMove(newStart.coerceIn(0L, duration - range.durationMs))
+                            val r = currentRange
+                            val dur = currentDuration
+                            val deltaMs = ((dragAmount.x / trackPx) * dur).toLong()
+                            val maxStart = (r.endMs - ClipRange.MIN_MS).coerceAtLeast(0L)
+                            val minStart = (r.endMs - ClipRange.MAX_MS).coerceAtLeast(0L)
+                            val newStart = (r.startMs + deltaMs).coerceIn(minStart, maxStart)
+                            currentOnUpdate(newStart, r.endMs)
                         }
                     }
             )
+            // Right edge handle resizes endMs.
             Box(
                 Modifier
                     .align(Alignment.CenterEnd)
-                    .width(10.dp)
+                    .width(12.dp)
                     .fillMaxHeight()
                     .background(color)
+                    .pointerInput(trackPx) {
+                        androidx.compose.foundation.gestures.detectDragGestures { change, dragAmount ->
+                            change.consume()
+                            val r = currentRange
+                            val dur = currentDuration
+                            val deltaMs = ((dragAmount.x / trackPx) * dur).toLong()
+                            val minEnd = (r.startMs + ClipRange.MIN_MS).coerceAtMost(dur)
+                            val maxEnd = (r.startMs + ClipRange.MAX_MS).coerceAtMost(dur)
+                            val newEnd = (r.endMs + deltaMs).coerceIn(minEnd, maxEnd)
+                            currentOnUpdate(r.startMs, newEnd)
+                        }
+                    }
             )
             Text(
                 "#${index + 1}",
