@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <external-path name="public_movies" path="Movies/ClipMe/" />
     <external-files-path name="exported" path="Movies/ClipMe/" />
     <files-path name="model" path="models/" />
     <files-path name="exports" path="exports/" />
-    <cache-path name="work_cache" path="cm_work/" />
 </paths>

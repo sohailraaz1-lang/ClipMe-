@@ -123,28 +123,16 @@ class CreateViewModel(app: Application) : AndroidViewModel(app) {
                     bottom = (it.bottom / frame.height).coerceIn(0f, 1f)
                 )
             } ?: NormRect.TopRight
-            val current = _state.value
-            _state.value = current.copy(
-                camRect = norm,
-                settings = current.settings.copy(gameRect = current.gameRect, camRect = norm)
-            )
+            _state.value = _state.value.copy(camRect = norm)
         }
     }
 
     fun setGameRect(rect: NormRect) {
-        val current = _state.value
-        _state.value = current.copy(
-            gameRect = rect,
-            settings = current.settings.copy(gameRect = rect)
-        )
+        _state.value = _state.value.copy(gameRect = rect)
     }
 
     fun setCamRect(rect: NormRect) {
-        val current = _state.value
-        _state.value = current.copy(
-            camRect = rect,
-            settings = current.settings.copy(camRect = rect)
-        )
+        _state.value = _state.value.copy(camRect = rect)
     }
 
     /** Downloads the stream window (last [windowSec] seconds for live). */
@@ -213,10 +201,14 @@ class CreateViewModel(app: Application) : AndroidViewModel(app) {
     fun updateRange(index: Int, startMs: Long, endMs: Long) {
         if (index !in _state.value.ranges.indices) return
         val s = _state.value
-        val duration = s.windowDurationMs.coerceAtLeast(ClipRange.MIN_MS)
-        val start = startMs.coerceIn(0L, (duration - ClipRange.MIN_MS).coerceAtLeast(0L))
+        val duration = s.windowDurationMs
+        var start = startMs.coerceIn(0L, duration)
         var end = endMs.coerceIn(start + ClipRange.MIN_MS, duration)
         if (end - start > ClipRange.MAX_MS) end = start + ClipRange.MAX_MS
+        if (start + ClipRange.MAX_MS > duration) {
+            start = (duration - ClipRange.MAX_MS).coerceAtLeast(0L)
+            end = duration
+        }
         val ranges = s.ranges.toMutableList()
         ranges[index] = ClipRange(start, end)
         _state.value = s.copy(ranges = ranges, selectedRange = index, error = null)
@@ -302,46 +294,30 @@ class CreateViewModel(app: Application) : AndroidViewModel(app) {
         if (s.ranges.isEmpty() || s.transcribing) return
         _state.value = s.copy(transcribing = true, captionProgress = 0f, error = null)
         viewModelScope.launch {
-            val modelManager = ClipMeApp.from(getApplication()).captionModelManager
-            if (!modelManager.isReady()) {
-                modelManager.download()
-                val ms = modelManager.state.value
-                if (ms is com.clipme.app.captions.ModelState.Failed) {
-                    _state.value = _state.value.copy(transcribing = false, error = ms.message)
-                    return@launch
-                }
-            }
             val done = mutableMapOf<Int, List<CaptionLine>>()
-            var lastError: String? = null
+            var overall = 0f
             for (i in s.ranges.indices) {
                 val range = s.ranges[i]
                 val result = captionEngine.transcribeClip(
                     clipFile = source,
                     clipStartMs = range.startMs,
-                    clipDurationMs = range.durationMs,
-                    onProgress = { p ->
-                        _state.value = _state.value.copy(
-                            captionProgress = ((i + p) / s.ranges.size).coerceIn(0f, 1f)
-                        )
-                    }
+                    clipEndMs = range.endMs,
+                    onProgress = { p -> overall = (i + p) / s.ranges.size }
                 )
                 when (result) {
                     is com.clipme.app.captions.CaptionEngine.CaptionResult.Done -> done[i] = result.lines
                     is com.clipme.app.captions.CaptionEngine.CaptionResult.Failed -> {
                         done[i] = emptyList()
-                        lastError = result.message
                     }
                 }
                 _state.value = _state.value.copy(
                     captionProgress = (i + 1f) / s.ranges.size
                 )
             }
-            val anyWords = done.values.any { it.isNotEmpty() }
             _state.value = _state.value.copy(
                 transcribing = false,
                 captions = done,
-                settings = _state.value.settings.copy(captionsOn = true),
-                error = if (!anyWords) lastError else null
+                settings = _state.value.settings.copy(captionsOn = true)
             )
         }
     }
@@ -358,15 +334,11 @@ class CreateViewModel(app: Application) : AndroidViewModel(app) {
         val jobs = s.ranges.mapIndexed { i, r ->
             ExportJob(
                 jobId = "job_${System.currentTimeMillis()}_$i",
-                outputFile = FileUtils.tempExportPath(app).absolutePath,
+                outputFile = FileUtils.uniqueExportPath(app).absolutePath,
                 sourceFile = source.absolutePath,
                 startMs = r.startMs,
                 durationMs = r.durationMs,
-                settings = s.settings.copy(
-                    gameRect = s.gameRect,
-                    camRect = s.camRect,
-                    captionLines = s.captions[i] ?: emptyList()
-                ),
+                settings = s.settings.copy(captionLines = s.captions[i] ?: emptyList()),
                 streamTitle = s.stream?.title
             )
         }

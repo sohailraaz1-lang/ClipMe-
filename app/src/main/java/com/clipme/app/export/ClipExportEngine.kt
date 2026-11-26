@@ -188,11 +188,8 @@ class ClipExportEngine(private val context: Context) {
         mainHandler.removeCallbacks(pollRunnable)
         activeJob?.let { job ->
             runCatching {
-                val tmp = File(job.outputFile)
-                ClipMeApp.from(context).clipStore.addFromExport(tmp, job.streamTitle)
-                if (tmp.parentFile?.name == "exports") {
-                    FileUtils.deleteQuietly(tmp)
-                }
+                val published = FileUtils.publishToGallery(context, File(job.outputFile))
+                ClipMeApp.from(context).clipStore.addFromExport(published, job.streamTitle)
             }
         }
         val s = _exportState.value.copy(completed = _exportState.value.completed + 1)
@@ -203,10 +200,6 @@ class ClipExportEngine(private val context: Context) {
 
     private fun onJobFailed(jobIndex: Int) {
         mainHandler.removeCallbacks(pollRunnable)
-        activeJob?.let { job ->
-            val tmp = File(job.outputFile)
-            if (tmp.parentFile?.name == "exports") FileUtils.deleteQuietly(tmp)
-        }
         val s = _exportState.value.copy(failed = _exportState.value.failed + 1)
         cursor++
         _exportState.value = s.copy(current = cursor)

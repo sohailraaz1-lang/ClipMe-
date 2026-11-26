@@ -32,6 +32,13 @@ class TrendingViewModel : ViewModel() {
     private val _state = MutableStateFlow(TrendingUiState())
     val state: StateFlow<TrendingUiState> = _state.asStateFlow()
 
+    init {
+        _state.value = TrendingUiState(
+            loading = false,
+            clips = trendingClips
+        )
+    }
+
     private val trendingClips = listOf(
         TrendingClip(
             "Rainbow Six highlight — 1v5 clutch",
@@ -98,11 +105,4 @@ class TrendingViewModel : ViewModel() {
             "split"
         )
     )
-
-    init {
-        _state.value = TrendingUiState(
-            loading = false,
-            clips = trendingClips
-        )
-    }
 }

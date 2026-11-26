@@ -117,15 +117,22 @@ class ClipForegroundService : Service() {
             .build()
 
     private fun startAsForeground(notification: Notification) {
-        if (Build.VERSION.SDK_INT >= 30) {
-            ServiceCompat.startForeground(
+        when {
+            // mediaProcessing only exists from Android 15 (API 35).
+            Build.VERSION.SDK_INT >= 35 -> ServiceCompat.startForeground(
                 this,
                 NOTIFICATION_ID,
                 notification,
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING
             )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+            // Android 10-14: use dataSync, which is declared in the manifest too.
+            Build.VERSION.SDK_INT >= 29 -> ServiceCompat.startForeground(
+                this,
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            )
+            else -> startForeground(NOTIFICATION_ID, notification)
         }
     }
 

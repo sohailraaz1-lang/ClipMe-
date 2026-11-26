@@ -6,15 +6,16 @@ import com.clipme.app.model.StreamInfo
 import com.clipme.app.net.HttpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.downloader.Downloader
 import org.schabi.newpipe.extractor.downloader.Request
 import org.schabi.newpipe.extractor.downloader.Response
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.schabi.newpipe.extractor.exceptions.ExtractionException
+import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
 import org.schabi.newpipe.extractor.stream.DeliveryMethod
+import org.schabi.newpipe.extractor.stream.VideoStream
 import org.schabi.newpipe.extractor.stream.StreamInfo as NpStreamInfo
 import org.schabi.newpipe.extractor.stream.StreamType
 
@@ -57,9 +58,6 @@ class StreamResolver(
 
     // ------------------------------------------------------------------ YouTube
 
-    private fun parseHeight(resolution: String?): Int =
-        resolution?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 0
-
     private suspend fun resolveYouTube(url: String): StreamInfo = withContext(Dispatchers.IO) {
         val videoId = youTubeVideoId(url)
             ?: throw IllegalArgumentException("Not a valid YouTube link")
@@ -67,31 +65,18 @@ class StreamResolver(
         try {
             val info = NpStreamInfo.getInfo(cleanUrl)
             val isLive = info.streamType == StreamType.LIVE_STREAM
-            val progressive = info.videoStreams
-                ?.filter {
-                    !it.isVideoOnly() &&
-                        it.getFormat()?.mimeType?.startsWith("video/mp4") == true &&
-                        it.content.isNotBlank()
-                }
-                ?.maxByOrNull { parseHeight(it.getResolution()) }
+            fun heightOf(v: VideoStream): Int =
+                Regex("^(\\d+)").find(v.resolution ?: "")?.groupValues?.get(1)?.toIntOrNull() ?: 0
+
+            // Direct MP4 (audio + video muxed), best quality first.
+            val progressive = info.videoStreams.orEmpty()
+                .filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
+                .maxByOrNull { heightOf(it) }
                 ?.content
+
             val manifests = buildList {
-                if (isLive) {
-                    info.hlsUrl?.takeIf { it.isNotBlank() }?.let { add(it) }
-                    info.videoOnlyStreams
-                        ?.filter { it.deliveryMethod == DeliveryMethod.HLS && it.content.isNotBlank() }
-                        ?.sortedBy { parseHeight(it.getResolution()) }
-                        ?.forEach { add(it.content) }
-                }
-                info.videoOnlyStreams
-                    ?.filter { it.deliveryMethod != DeliveryMethod.HLS && it.content.isNotBlank() }
-                    ?.sortedByDescending { parseHeight(it.getResolution()) }
-                    ?.forEach { add(it.content) }
+                info.hlsUrl?.takeIf { it.isNotBlank() }?.let { add(it) }
                 progressive?.let { add(it) }
-                info.videoStreams
-                    ?.filter { it.content.isNotBlank() }
-                    ?.sortedByDescending { parseHeight(it.getResolution()) }
-                    ?.forEach { add(it.content) }
             }.distinct()
 
             StreamInfo(
@@ -102,7 +87,7 @@ class StreamResolver(
                 thumbnailUrl = info.thumbnails.firstOrNull()?.url
                     ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg",
                 isLive = isLive,
-                durationMs = info.duration.takeIf { it > 0L }?.let { it * 1000L },
+                durationMs = if (info.duration > 0) info.duration * 1000L else null,
                 progressiveUrl = progressive,
                 manifests = manifests
             )
@@ -159,7 +144,7 @@ class StreamResolver(
             .put("variables", JSONObject(variables))
             .toString()
         val req = http.requestBuilder("https://gql.twitch.tv/gql")
-            .post(payload.toRequestBody("application/json".toMediaType()))
+            .post(okhttp3.RequestBody.create(okhttp3.MediaType.get("application/json"), payload))
             .header("Client-ID", "kimne78kx3ncx6brgo4mv6wki5h1ko")
             .build()
         http.newCall(req).execute().use { r ->
@@ -367,26 +352,33 @@ class StreamResolver(
 class DownloaderImpl(private val http: HttpClient) : Downloader() {
 
     override fun execute(request: Request): Response {
-        val builder = http.requestBuilder(request.url())
-        val data = request.dataToSend()
         val method = request.httpMethod()
-        if (data != null) {
-            builder.method(method, data.toRequestBody())
-        } else if (method.equals("POST", ignoreCase = true) || method.equals("PUT", ignoreCase = true)) {
-            builder.method(method, ByteArray(0).toRequestBody())
-        } else {
-            builder.method(method, null)
+        val data = request.dataToSend()
+        val body = when {
+            data != null -> data.toRequestBody()
+            method == "POST" || method == "PUT" || method == "PATCH" -> ByteArray(0).toRequestBody()
+            else -> null
         }
-        request.headers().forEach { (k, values) ->
-            values.forEach { v -> builder.addHeader(k, v) }
+        val builder = okhttp3.Request.Builder()
+            .method(method, body)
+            .url(request.url())
+            .header("User-Agent", http.userAgent)
+        request.headers().forEach { (name, values) ->
+            builder.removeHeader(name)
+            values.forEach { builder.addHeader(name, it) }
         }
-        return http.newCall(builder.build()).execute().use { resp ->
-            Response(
-                resp.code,
-                resp.message,
-                resp.headers.toMultimap(),
-                resp.body?.string() ?: "",
-                resp.request.url.toString()
+        val resp = http.newCall(builder.build()).execute()
+        if (resp.code == 429) {
+            resp.close()
+            throw ReCaptchaException("reCaptcha challenge requested", request.url())
+        }
+        resp.use {
+            return Response(
+                it.code,
+                it.message,
+                it.headers.toMultimap(),
+                it.body?.string() ?: "",
+                it.request.url.toString()
             )
         }
     }

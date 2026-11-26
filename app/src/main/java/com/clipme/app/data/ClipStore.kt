@@ -1,10 +1,8 @@
 package com.clipme.app.data
 
-import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
 import android.provider.MediaStore
-import androidx.core.content.FileProvider
 import com.clipme.app.model.ClipItem
 import com.clipme.app.util.FileUtils
 import kotlinx.coroutines.Dispatchers
@@ -89,14 +87,11 @@ class ClipStore(private val context: Context) {
                 if (f.isFile && f.name.startsWith("clip_") && f.name.endsWith(".mp4") &&
                     !seen.contains(f.absolutePath)
                 ) {
-                    val contentUri = runCatching {
-                        FileProvider.getUriForFile(context, "com.clipme.app.fileprovider", f)
-                    }.getOrElse { Uri.fromFile(f) }
                     items.add(
                         ClipItem(
                             id = "fs_${f.name}_${f.lastModified()}",
                             filePath = f.absolutePath,
-                            uri = contentUri,
+                            uri = Uri.fromFile(f),
                             name = f.name,
                             durationMs = 0L,
                             sizeBytes = f.length(),
@@ -116,16 +111,6 @@ class ClipStore(private val context: Context) {
         if (!clean.endsWith(".mp4")) clean += ".mp4"
         if (clean == item.name || clean.isEmpty()) return@withContext false
         runCatching {
-            if (item.uri.scheme == "content" && item.id.startsWith("ms_")) {
-                val values = ContentValues().apply {
-                    put(MediaStore.Video.Media.DISPLAY_NAME, clean)
-                }
-                val rows = context.contentResolver.update(item.uri, values, null, null)
-                if (rows > 0) {
-                    refresh()
-                    return@withContext true
-                }
-            }
             val file = File(item.filePath)
             if (!file.exists()) return@withContext false
             val renamed = File(file.parentFile, clean)

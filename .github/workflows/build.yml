@@ -3,87 +3,35 @@ name: Build ClipMe APK
 on:
   push:
     branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
   workflow_dispatch:
-
-permissions:
-  contents: write
-
-concurrency:
-  group: build-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          distribution: temurin
+          java-version: 17
 
-      # Installs Android cmdline-tools + accepts licenses + installs the SDK
-      # packages. (sdkmanager is NOT on PATH on GitHub runners by default,
-      # which caused "sdkmanager: command not found".)
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v3
         with:
-          packages: "platform-tools platforms;android-35 build-tools;35.0.0"
+          # The default 'tools' package no longer exists and makes sdkmanager fail.
+          # Gradle downloads the platform and build-tools it needs by itself.
+          packages: ''
 
-      - name: Set up Gradle 8.9
-        uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.9
 
       - name: Build debug APK
-        shell: bash
-        run: |
-          set -o pipefail
-          gradle assembleDebug --no-daemon --console=plain 2>&1 | tee build.log
+        run: gradle assembleDebug --stacktrace
 
-      # Shows ONLY the real errors (Kotlin "e:" lines + Gradle's "What went wrong")
-      # on the run's Summary page, so you don't have to scroll the huge log.
-      - name: Show build errors
-        if: failure()
-        shell: bash
-        run: |
-          {
-            echo '## Build errors'
-            echo '```'
-            grep -E '^e: |^\s*> |What went wrong|Could not|error:' build.log | head -60 || true
-            echo '```'
-          } | tee -a "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload build log
-        if: always()
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: build-log
-          path: |
-            build.log
-            app/build/reports/**
-          if-no-files-found: ignore
-          retention-days: 14
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: clipme-debug-apk
+          name: ClipMe-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 30
-
-      - name: Publish APK as a GitHub Release
-        if: github.event_name != 'pull_request'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: build-${{ github.run_number }}
-          target_commitish: ${{ github.sha }}
-          name: ClipMe Debug APK #${{ github.run_number }}
-          files: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

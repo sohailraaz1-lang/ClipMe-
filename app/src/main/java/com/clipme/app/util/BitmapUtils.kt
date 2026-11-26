@@ -4,6 +4,9 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RenderEffect
+import android.graphics.Shader
 import kotlin.math.max
 import kotlin.math.min
 
@@ -35,28 +38,59 @@ object BitmapUtils {
         return out
     }
 
-    /**
-     * Blurs [src] and scales it so both dimensions cover [w]x[h] (blurred background fill).
-     * Uses a cheap, dependency-free blur: shrink to a tiny bitmap and scale back up with
-     * bilinear filtering (runs on every API level, no RenderScript needed).
-     */
-    @Suppress("UNUSED_PARAMETER")
+    /** Blurs [src] and scales it so both dimensions cover [w]x[h] (blurred background fill). */
     fun blurFill(context: Context, src: Bitmap, w: Int, h: Int): Bitmap {
         val coverScale = max(w.toFloat() / src.width, h.toFloat() / src.height)
-        val sw = (src.width * coverScale).toInt().coerceAtLeast(w)
-        val sh = (src.height * coverScale).toInt().coerceAtLeast(h)
-        val x = ((sw - w) / 2).coerceAtLeast(0)
-        val y = ((sh - h) / 2).coerceAtLeast(0)
+        val sw = (src.width * coverScale).toInt()
+        val sh = (src.height * coverScale).toInt()
+        val scaled = Bitmap.createScaledBitmap(src, sw, sh, true)
         return try {
-            val tinyW = (w / 24).coerceAtLeast(8)
-            val tinyH = (h / 24).coerceAtLeast(8)
-            val tiny = Bitmap.createScaledBitmap(src, tinyW, tinyH, true)
-            val blurred = Bitmap.createScaledBitmap(tiny, sw, sh, true)
-            if (tiny != src) tiny.recycle()
-            Bitmap.createBitmap(blurred, x, y, min(w, sw - x), min(h, sh - y))
+            if (android.os.Build.VERSION.SDK_INT >= 31) {
+                scaled.createScaledBitmapWithRenderEffect(w, h)
+            } else {
+                renderScriptBlur(context, scaled, w, h)
+            }
         } catch (t: Throwable) {
-            val scaled = Bitmap.createScaledBitmap(src, sw, sh, true)
+            // Fallback: center-crop the scaled bitmap without blur.
+            val x = ((sw - w) / 2).coerceAtLeast(0)
+            val y = ((sh - h) / 2).coerceAtLeast(0)
             Bitmap.createBitmap(scaled, x, y, min(w, sw - x), min(h, sh - y))
+        }
+    }
+
+    private fun Bitmap.createScaledBitmapWithRenderEffect(w: Int, h: Int): Bitmap {
+        val x = ((width - w) / 2).coerceAtLeast(0)
+        val y = ((height - h) / 2).coerceAtLeast(0)
+        val cw = min(w, width - x)
+        val ch = min(h, height - y)
+        val src = if (cw == width && ch == height) this else Bitmap.createBitmap(this, x, y, cw, ch)
+        val paint = Paint().apply {
+            renderEffect = RenderEffect.createBlurEffect(40f, 40f, Shader.TileMode.MIRROR)
+        }
+        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(out)
+        canvas.drawBitmap(src, 0f, 0f, paint)
+        if (src != this) src.recycle()
+        return out
+    }
+
+    @Suppress("DEPRECATION")
+    private fun renderScriptBlur(context: Context, src: Bitmap, w: Int, h: Int): Bitmap {
+        val rs = android.renderscript.RenderScript.create(context)
+        try {
+            val inAlloc = android.renderscript.Allocation.createFromBitmap(rs, src)
+            val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            val outAlloc = android.renderscript.Allocation.createFromBitmap(rs, out)
+            val blur = android.renderscript.ScriptIntrinsicBlur.create(rs, android.renderscript.Element.U8_4(rs))
+            blur.setRadius(20f)
+            blur.setInput(inAlloc)
+            blur.forEach(outAlloc)
+            outAlloc.copyTo(out)
+            val x = ((src.width - w) / 2).coerceAtLeast(0)
+            val y = ((src.height - h) / 2).coerceAtLeast(0)
+            return Bitmap.createBitmap(out, x, y, min(w, out.width - x), min(h, out.height - y))
+        } finally {
+            rs.destroy()
         }
     }
 

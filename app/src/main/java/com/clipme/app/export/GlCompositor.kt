@@ -143,7 +143,7 @@ private class CanvasComposeShaderProgram(
                 "uDstRect",
                 floatArrayOf(
                     region.dst.left * 2f - 1f,
-                    1f - 2f * region.dst.bottom,
+                    region.dst.bottom * 2f - 1f,
                     region.dst.width * 2f,
                     region.dst.height * 2f
                 )
@@ -351,8 +351,8 @@ private class CanvasComposeShaderProgram(
                 alpha = 1.0 - smoothstep(0.78, 1.0, dist);
               } else if (uMode == MODE_ROUNDED) {
                 vec2 ctr = uDstRect.xy + uDstRect.zw * 0.5;
-                vec2 halfSize = uDstRect.zw * 0.5;
-                vec2 q = abs(vDstCoord - ctr) - (halfSize - vec2(uCornerRadius));
+                vec2 hs = uDstRect.zw * 0.5;
+                vec2 q = abs(vDstCoord - ctr) - (hs - vec2(uCornerRadius));
                 float dist = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - uCornerRadius;
                 alpha = 1.0 - smoothstep(0.0, max(uCornerRadius * 0.25, 0.004), dist);
               }
@@ -529,7 +529,6 @@ private fun renderCaption(text: String, canvasW: Int, style: CaptionStyle): Bitm
         color = android.graphics.Color.WHITE
         textAlign = Paint.Align.LEFT
     }
-    val isBox = style == CaptionStyle.BOX
     val metrics = paint.fontMetrics
     val lineHeight = metrics.bottom - metrics.top
     val padX = (size * 0.6f).toInt()
@@ -557,7 +556,7 @@ private fun renderCaption(text: String, canvasW: Int, style: CaptionStyle): Bitm
     val bitmap = Bitmap.createBitmap(bitmapW, bitmapH, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
 
-    if (isBox) {
+    if (style == CaptionStyle.BOX) {
         val box = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = android.graphics.Color.argb(190, 13, 15, 14)
         }
@@ -570,11 +569,11 @@ private fun renderCaption(text: String, canvasW: Int, style: CaptionStyle): Bitm
     var y = padY - metrics.top
     for (lineText in textLines) {
         val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = if (isBox) 0f else size * 0.22f
+            this.style = Paint.Style.STROKE
+            strokeWidth = if (style == CaptionStyle.BOX) 0f else size * 0.22f
             color = android.graphics.Color.rgb(10, 12, 11)
         }
-        if (!isBox) {
+        if (style != CaptionStyle.BOX) {
             canvas.drawText(lineText, padX.toFloat(), y, stroke)
         }
         canvas.drawText(lineText, padX.toFloat(), y, paint)

@@ -92,30 +92,21 @@ fun MyClipsScreen(
 
             s.clips.isEmpty() -> EmptyClips()
 
-            else -> {
-                val context = androidx.compose.ui.platform.LocalContext.current
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(s.clips, key = { it.id }) { clip ->
-                        ClipCard(
-                            clip = clip,
-                            onPlay = {
-                                val viewIntent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                                    setDataAndType(clip.uri, "video/mp4")
-                                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                                runCatching { context.startActivity(viewIntent) }
-                            },
-                            onRename = { onRename(clip, it) },
-                            onDelete = { onDelete(clip) },
-                            onShare = { onShare(clip) }
-                        )
-                    }
+            else -> LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(s.clips, key = { it.id }) { clip ->
+                    ClipCard(
+                        clip = clip,
+                        onPlay = { /* open in a player — external apps handle the uri */ },
+                        onRename = { onRename(clip, it) },
+                        onDelete = { onDelete(clip) },
+                        onShare = { onShare(clip) }
+                    )
                 }
             }
         }

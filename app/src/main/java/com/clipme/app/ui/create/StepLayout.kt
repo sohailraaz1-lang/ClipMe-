@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -64,7 +63,6 @@ private val STEP_3_HELP = listOf(
 fun StepLayout(
     settings: ExportSettings,
     clipCount: Int,
-    hasCaptions: Boolean,
     transcribing: Boolean,
     captionProgress: Float,
     exportState: ExportUiState,
@@ -162,7 +160,7 @@ fun StepLayout(
                     Text("TRANSCRIBING… ${(captionProgress * 100).toInt()}%", fontWeight = FontWeight.Bold)
                 } else {
                     Text(
-                        if (hasCaptions) "RE-TRANSCRIBE CAPTIONS" else "TRANSCRIBE CAPTIONS",
+                        if (settings.captionLines.isNotEmpty()) "RE-TRANSCRIBE CAPTIONS" else "TRANSCRIBE CAPTIONS",
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp
                     )
