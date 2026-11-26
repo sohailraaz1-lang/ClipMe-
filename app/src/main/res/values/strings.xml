@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ClipMe</string>
+    <string name="export_dir_name">ClipMe</string>
+    <string name="clip_prefix">clip</string>
+
+    <!-- Foreground export service -->
+    <string name="notif_channel_name">Clip exports</string>
+    <string name="notif_channel_desc">Progress of the batch clip export</string>
+    <string name="notif_preparing">Preparing your clips…</string>
+    <string name="notif_preparing_detail">Starting the export queue</string>
+    <string name="notif_exporting">Exporting clips…</string>
+    <string name="notif_batch">Clip it — %1$d clips</string>
+    <string name="notif_progress">Clip %1$d of %2$d · %3$d%%</string>
+    <string name="notif_cancel">Cancel</string>
+    <string name="notif_all_done">All %1$d clips exported</string>
+    <string name="notif_done_errors">%1$d exported · %2$d error(s)</string>
+</resources>
+
