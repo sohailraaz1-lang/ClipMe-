@@ -45,8 +45,16 @@ jobs:
       - name: Build debug APK
         shell: bash
         run: |
-          set -o pipefail
+          set +e
           gradle assembleDebug --no-daemon --console=plain 2>&1 | tee build.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            echo ""
+            echo "=================== COMPILER ERRORS (summary) ==================="
+            grep -E '^e: ' build.log | sed -E 's#file:///home/runner/work/[^/]+/[^/]+/app/src/main/java/com/clipme/app/##' | head -60
+            echo "=================================================================="
+          fi
+          exit $status
 
       # Shows ONLY the real errors (Kotlin "e:" lines + Gradle's "What went wrong")
       # on the run's Summary page, so you don't have to scroll the huge log.
