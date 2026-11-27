@@ -117,12 +117,12 @@ class ClipForegroundService : Service() {
             .build()
 
     private fun startAsForeground(notification: Notification) {
-        if (Build.VERSION.SDK_INT >= 30) {
+        if (Build.VERSION.SDK_INT >= 29) {
             ServiceCompat.startForeground(
                 this,
                 NOTIFICATION_ID,
                 notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
             )
         } else {
             startForeground(NOTIFICATION_ID, notification)

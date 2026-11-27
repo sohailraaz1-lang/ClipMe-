@@ -55,6 +55,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        showLastCrashIfAny()
         handleIntent(intent)
         setContent {
             ClipMeTheme {
@@ -74,6 +75,25 @@ class MainActivity : ComponentActivity() {
     }
 
     /** Grabs a VIEW deep link (youtube/twitch) and routes it to the Create tab. */
+    /** If the app crashed last time, show the error so it can be copied and reported. */
+    private fun showLastCrashIfAny() {
+        val file = java.io.File(filesDir, ClipMeApp.CRASH_FILE)
+        if (!file.exists()) return
+        val text = runCatching { file.readText() }.getOrDefault("")
+        file.delete()
+        if (text.isBlank()) return
+        android.app.AlertDialog.Builder(this)
+            .setTitle("ClipMe crashed last time")
+            .setMessage(text.take(1800))
+            .setPositiveButton("Copy") { _, _ ->
+                val cm = getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                    as android.content.ClipboardManager
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("crash", text))
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
     private fun handleIntent(intent: Intent?) {
         if (intent?.action == Intent.ACTION_VIEW) {
             val url = intent.data?.toString()

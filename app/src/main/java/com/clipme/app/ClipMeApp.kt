@@ -23,10 +23,28 @@ class ClipMeApp : Application() {
     val exportEngine: ClipExportEngine by lazy { ClipExportEngine(this) }
 
     companion object {
+        const val CRASH_FILE = "last_crash.txt"
         fun from(context: Context): ClipMeApp = context.applicationContext as ClipMeApp
     }
 
     override fun onCreate() {
         super.onCreate()
+        installCrashReporter()
+    }
+
+    /** Saves the stack trace of any crash so the next launch can show it on screen. */
+    private fun installCrashReporter() {
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                val text = buildString {
+                    append("Thread: ").append(thread.name).append('\n')
+                    append(android.util.Log.getStackTraceString(throwable))
+                }
+                java.io.File(filesDir, CRASH_FILE).writeText(text.take(6000))
+            } catch (_: Throwable) {
+            }
+            previous?.uncaughtException(thread, throwable)
+        }
     }
 }
