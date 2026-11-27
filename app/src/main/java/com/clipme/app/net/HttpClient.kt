@@ -8,7 +8,7 @@ import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 /** Wraps OkHttp with timeouts tuned for HLS segment streaming. */
 class HttpClient(private val context: Context) {

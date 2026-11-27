@@ -170,7 +170,6 @@ class ClipExportEngine(private val context: Context) {
 
     private fun finishBatch() {
         mainHandler.removeCallbacks(pollRunnable)
-        transformer?.let { runCatching { it.release() } }
         transformer = null
         activeJob = null
         val s = _exportState.value

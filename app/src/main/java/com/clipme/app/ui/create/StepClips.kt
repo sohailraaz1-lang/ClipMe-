@@ -278,7 +278,7 @@ private fun ClipSegment(
                         change.consume()
                         val r = currentRange
                         val dur = currentDuration
-                        val deltaMs = ((dragAmount.x / trackPx) * dur).toLong()
+                        val deltaMs = ((dragAmount.x / trackPx) * dur.toFloat()).toLong()
                         val maxStart = (dur - r.durationMs).coerceAtLeast(0L)
                         val newStart = (r.startMs + deltaMs).coerceIn(0L, maxStart)
                         currentOnUpdate(newStart, newStart + r.durationMs)
@@ -297,7 +297,7 @@ private fun ClipSegment(
                             change.consume()
                             val r = currentRange
                             val dur = currentDuration
-                            val deltaMs = ((dragAmount.x / trackPx) * dur).toLong()
+                            val deltaMs = ((dragAmount.x / trackPx) * dur.toFloat()).toLong()
                             val maxStart = (r.endMs - ClipRange.MIN_MS).coerceAtLeast(0L)
                             val minStart = (r.endMs - ClipRange.MAX_MS).coerceAtLeast(0L)
                             val newStart = (r.startMs + deltaMs).coerceIn(minStart, maxStart)
@@ -317,7 +317,7 @@ private fun ClipSegment(
                             change.consume()
                             val r = currentRange
                             val dur = currentDuration
-                            val deltaMs = ((dragAmount.x / trackPx) * dur).toLong()
+                            val deltaMs = ((dragAmount.x / trackPx) * dur.toFloat()).toLong()
                             val minEnd = (r.startMs + ClipRange.MIN_MS).coerceAtMost(dur)
                             val maxEnd = (r.startMs + ClipRange.MAX_MS).coerceAtMost(dur)
                             val newEnd = (r.endMs + deltaMs).coerceIn(minEnd, maxEnd)

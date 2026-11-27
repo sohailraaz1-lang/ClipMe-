@@ -315,8 +315,8 @@ class StreamResolver(
 
     private companion object {
         const val USER_QUERY = """
-            query User($login: String!) {
-              user(login: $login) {
+            query User(${'$'}login: String!) {
+              user(login: ${'$'}login) {
                 id
                 login
                 displayName
@@ -326,8 +326,8 @@ class StreamResolver(
             }
         """
         const val STREAM_QUERY = """
-            query User($login: String!) {
-              user(login: $login) {
+            query User(${'$'}login: String!) {
+              user(login: ${'$'}login) {
                 stream {
                   id
                   title
@@ -339,8 +339,8 @@ class StreamResolver(
             }
         """
         const val CHANNEL_QUERY = """
-            query User($login: String!) {
-              user(login: $login) {
+            query User(${'$'}login: String!) {
+              user(login: ${'$'}login) {
                 displayName
                 lastBroadcast {
                   id
@@ -351,8 +351,8 @@ class StreamResolver(
             }
         """
         const val VOD_QUERY = """
-            query Video($id: ID!) {
-              video(id: $id) {
+            query Video(${'$'}id: ID!) {
+              video(id: ${'$'}id) {
                 id
                 title
                 lengthSeconds

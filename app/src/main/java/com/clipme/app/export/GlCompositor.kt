@@ -7,7 +7,6 @@ import android.graphics.Paint
 import android.opengl.GLES20
 import androidx.annotation.OptIn
 import androidx.media3.common.Effect
-import androidx.media3.common.OverlaySettings
 import androidx.media3.common.VideoFrameProcessingException
 import androidx.media3.common.util.GlProgram
 import androidx.media3.common.util.GlUtil
@@ -17,7 +16,10 @@ import androidx.media3.effect.BaseGlShaderProgram
 import androidx.media3.effect.BitmapOverlay
 import androidx.media3.effect.GlEffect
 import androidx.media3.effect.OverlayEffect
-import androidx.media3.effect.StaticOverlaySettings
+import androidx.media3.effect.OverlaySettings
+import androidx.media3.effect.TextureOverlay
+import androidx.media3.effect.GlShaderProgram
+import com.google.common.collect.ImmutableList
 import com.clipme.app.model.CaptionLine
 import com.clipme.app.model.CaptionStyle
 import com.clipme.app.model.ExportSettings
@@ -60,7 +62,7 @@ object ClipCompositor {
         settings.stickers.forEach { sticker ->
             StickerAssets.load(context, sticker)?.let { overlays.add(StickerOverlay(it, sticker, CANVAS_W, CANVAS_H)) }
         }
-        if (overlays.isNotEmpty()) effects.add(OverlayEffect(overlays))
+        if (overlays.isNotEmpty()) effects.add(OverlayEffect(ImmutableList.copyOf<TextureOverlay>(overlays)))
         return effects
     }
 }
@@ -105,7 +107,7 @@ private fun cropToAspect(src: NormRect, aspect: Float): NormRect {
 @OptIn(UnstableApi::class)
 class CanvasComposeEffect(private val settings: ExportSettings) : GlEffect {
 
-    override fun toGlShaderProgram(context: Context, useHdr: Boolean): androidx.media3.common.GlShaderProgram {
+    override fun toGlShaderProgram(context: Context, useHdr: Boolean): GlShaderProgram {
         return CanvasComposeShaderProgram(settings)
     }
 }
@@ -374,17 +376,17 @@ private class CanvasComposeShaderProgram(
 private class HookOverlay(text: String, canvasW: Int, canvasH: Int) : BitmapOverlay() {
 
     private val bitmap: Bitmap = renderHook(text, canvasW)
-    private val settings: StaticOverlaySettings = buildSettings(canvasW)
+    private val settings: OverlaySettings = buildSettings(canvasW)
 
     override fun getBitmap(presentationTimeUs: Long): Bitmap = bitmap
 
     override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings = settings
 
-    private fun buildSettings(canvasW: Int): StaticOverlaySettings {
+    private fun buildSettings(canvasW: Int): OverlaySettings {
         val naturalFraction = bitmap.width.toFloat() / canvasW
         val target = min(0.90f, naturalFraction)
         val s = target * canvasW / bitmap.width
-        return StaticOverlaySettings.Builder()
+        return OverlaySettings.Builder()
             .setBackgroundFrameAnchor(0f, 0.86f)   // near the top (NDC y = +0.86)
             .setOverlayFrameAnchor(0f, 0f)
             .setScale(s, s)
@@ -450,7 +452,7 @@ private class CaptionOverlay(
     private val lineBitmaps: Map<Int, Bitmap> =
         lines.mapIndexed { index, line -> index to renderCaption(line.text, canvasW, style) }.toMap()
     private val emptyBitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
-    private val emptySettings = StaticOverlaySettings.Builder().setScale(0.01f, 0.01f).build()
+    private val emptySettings = OverlaySettings.Builder().setScale(0.01f, 0.01f).build()
 
     override fun getBitmap(presentationTimeUs: Long): Bitmap {
         val index = activeIndex(presentationTimeUs)
@@ -464,7 +466,7 @@ private class CaptionOverlay(
         val naturalFraction = bitmap.width.toFloat() / canvasW
         val target = min(0.88f, naturalFraction)
         val s = target * canvasW / bitmap.width
-        return StaticOverlaySettings.Builder()
+        return OverlaySettings.Builder()
             .setBackgroundFrameAnchor(0f, -0.52f)   // ~76% down the canvas (NDC y = -0.52)
             .setOverlayFrameAnchor(0f, 0f)
             .setScale(s, s)
@@ -493,9 +495,9 @@ private class StickerOverlay(
     canvasH: Int
 ) : BitmapOverlay() {
 
-    private val settings: StaticOverlaySettings = run {
+    private val settings: OverlaySettings = run {
         val s = placement.scale * canvasW / bitmap.width
-        StaticOverlaySettings.Builder()
+        OverlaySettings.Builder()
             .setBackgroundFrameAnchor(placement.cx * 2f - 1f, 1f - placement.cy * 2f)
             .setOverlayFrameAnchor(0f, 0f)
             .setScale(s, s)
@@ -570,7 +572,7 @@ private fun renderCaption(text: String, canvasW: Int, style: CaptionStyle): Bitm
     var y = padY - metrics.top
     for (lineText in textLines) {
         val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
+            this.style = Paint.Style.STROKE
             strokeWidth = if (isBox) 0f else size * 0.22f
             color = android.graphics.Color.rgb(10, 12, 11)
         }
