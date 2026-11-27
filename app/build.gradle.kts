@@ -95,7 +95,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
 
-    implementation("com.github.TeamNewPipe:NewPipeExtractor:0.24.6")
+    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.5")
     implementation("org.jsoup:jsoup:1.17.2")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.alphacephei:vosk-android:0.3.47")

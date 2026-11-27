@@ -106,10 +106,12 @@ class StreamResolver(
                 progressiveUrl = progressive,
                 manifests = manifests
             )
-        } catch (_: ExtractionException) {
-            resolveYouTubeFallback(videoId)
-        } catch (_: Exception) {
-            resolveYouTubeFallback(videoId)
+        } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Show the real reason instead of a vague "no playable stream" message.
+            val reason = e.message?.take(160) ?: e.javaClass.simpleName
+            throw IllegalStateException("YouTube blocked or changed this video (${e.javaClass.simpleName}): $reason")
         }
     }
 
