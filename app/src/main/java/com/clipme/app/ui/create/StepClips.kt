@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -274,7 +275,7 @@ private fun ClipSegment(
                 .border(2.dp, color, RoundedCornerShape(8.dp))
                 .clickable { onSelect() }
                 .pointerInput(trackPx) {
-                    androidx.compose.foundation.gestures.detectDragGestures { change, dragAmount ->
+                    detectDragGestures { change, dragAmount ->
                         change.consume()
                         val r = currentRange
                         val dur = currentDuration
@@ -293,7 +294,7 @@ private fun ClipSegment(
                     .fillMaxHeight()
                     .background(color)
                     .pointerInput(trackPx) {
-                        androidx.compose.foundation.gestures.detectDragGestures { change, dragAmount ->
+                        detectDragGestures { change, dragAmount ->
                             change.consume()
                             val r = currentRange
                             val dur = currentDuration
@@ -313,7 +314,7 @@ private fun ClipSegment(
                     .fillMaxHeight()
                     .background(color)
                     .pointerInput(trackPx) {
-                        androidx.compose.foundation.gestures.detectDragGestures { change, dragAmount ->
+                        detectDragGestures { change, dragAmount ->
                             change.consume()
                             val r = currentRange
                             val dur = currentDuration
